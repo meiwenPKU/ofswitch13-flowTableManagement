@@ -57,6 +57,9 @@ struct flow_table {
                                                 ordered by their timeout times. */
     struct list               idle_entries;   /* unordered list of entries with
                                                 idle timeout. */
+    /*map of all installed flow entries, where a flow entry is defined by its match fields. This is used to cacluate the capacity misses of flow table*/
+    struct hmap               all_installed_entries;
+    uint32_t                  numCapMiss;      /*number of capacity misses */
 };
 
 extern uint32_t oxm_ids[];
@@ -98,5 +101,8 @@ flow_table_aggregate_stats(struct flow_table *table, struct ofl_msg_multipart_re
 
 /*Apply lru policy to evict the least recently used flow entry from the given flow table*/
 void lru_evict(struct flow_table *table);
+
+/*Update the number of capacity misses if applicable*/
+void update_num_cap_miss(struct flow_table *table, struct flow_entry *entry);
 
 #endif /* FLOW_TABLE_H */

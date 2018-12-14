@@ -35,6 +35,7 @@
 #include "flow_table.h"
 #include "flow_entry.h"
 #include "oflib/ofl.h"
+#include "lib/hash.h"
 #include "oflib/oxm-match.h"
 #include "oflib/ofl-structs.h"
 #include "time.h"
@@ -129,6 +130,23 @@ void lru_evict(struct flow_table *table) {
     flow_entry_remove(lru_entry, OFPRR_EVICTION);
 }
 
+void update_num_cap_miss(struct flow_table *table, struct flow_entry *entry){
+  char* entry_match_string;
+  struct hmap_node* node;
+  size_t hash_value;
+  node = malloc(sizeof(struct hmap_node));
+  entry_match_string = ofl_structs_oxm_match_to_string((struct ofl_match*)(entry->stats->match));
+  hash_value = hash_string(entry_match_string, 0);
+  if (hmap_first_with_hash(&table->all_installed_entries, hash_value) != NULL){
+    // the flow entry was installed before
+    table->numCapMiss ++;
+    VLOG_DBG(LOG_MODULE, "numCapMiss=%d", table->numCapMiss);
+  } else {
+    // insert the hash value to the hmap
+    hmap_insert(&table->all_installed_entries, node, hash_value);
+  }
+}
+
 /* Handles flow mod messages with ADD command. */
 static ofl_err
 flow_table_add(struct flow_table *table, struct ofl_msg_flow_mod *mod, bool check_overlap, bool *match_kept, bool *insts_kept) {
@@ -159,6 +177,7 @@ flow_table_add(struct flow_table *table, struct ofl_msg_flow_mod *mod, bool chec
             list_remove(&entry->idle_node);
             flow_entry_destroy(entry);
             add_to_timeout_lists(table, new_entry);
+            update_num_cap_miss(table, new_entry);
             return 0;
         }
 
@@ -174,7 +193,7 @@ flow_table_add(struct flow_table *table, struct ofl_msg_flow_mod *mod, bool chec
 
     list_insert(&entry->match_node, &new_entry->match_node);
     add_to_timeout_lists(table, new_entry);
-
+    update_num_cap_miss(table, new_entry);
     return 0;
 }
 
@@ -415,6 +434,8 @@ flow_table_create(struct pipeline *pl, uint8_t table_id) {
     table = xmalloc(sizeof(struct flow_table));
     table->dp = pl->dp;
     table->disabled = 0;
+    table->numCapMiss = 0;
+    hmap_init(&table->all_installed_entries);
 
     /*Init table stats */
     table->stats = xmalloc(sizeof(struct ofl_table_stats));
