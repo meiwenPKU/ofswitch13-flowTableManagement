@@ -36,6 +36,7 @@
 #include "flow_entry.h"
 #include "oflib/ofl.h"
 #include "oflib/oxm-match.h"
+#include "oflib/ofl-structs.h"
 #include "time.h"
 #include "dp_capabilities.h"
 //#include "packet_handle_std.h"
@@ -122,7 +123,7 @@ void lru_evict(struct flow_table *table) {
     }
     // print the lru entry (src addr, dst addr, src port, dst port, protocol) infomation for debugging
     //VLOG_DBG(LOG_MODULE, "Evict the flow entry:");
-    msg = flow_entry_print(lru_entry);
+    msg = ofl_structs_oxm_match_to_string((struct ofl_match *)(lru_entry->stats->match));
     VLOG_DBG(LOG_MODULE, "Evict the flow entry: %s", msg);
     // evict the lru entry
     flow_entry_remove(lru_entry, OFPRR_EVICTION);

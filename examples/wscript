@@ -27,3 +27,6 @@ def build(bld):
 
     obj = bld.create_ns3_program('ofswitch13-single-domain', ['ofswitch13', 'internet-apps'])
     obj.source = 'ofswitch13-single-domain.cc'
+
+    obj = bld.create_ns3_program('ofswitch13-single-switch-externalController', ['ofswitch13', 'internet-apps', 'tap-bridge'])
+    obj.source = 'single-switch-externalController.cc'

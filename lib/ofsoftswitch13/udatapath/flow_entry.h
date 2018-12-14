@@ -122,6 +122,4 @@ flow_entry_destroy(struct flow_entry *entry);
 void
 flow_entry_remove(struct flow_entry *entry, uint8_t reason);
 
-char* flow_entry_print(struct flow_entry *entry);
-
 #endif /* FLOW_entry_H 1 */
