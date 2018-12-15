@@ -138,6 +138,11 @@ main (int argc, char *argv[])
   outputFile.open(filename);
   outputFile << "srcAddr, srcPort, dstAddr, dstPort, startTime, endTime\n";
 
+  // ApplicationContainer sink_apps;
+  // PacketSinkHelper Tcpsink_helper("ns3::TcpSocketFactory",InetSocketAddress(Ipv4Address::GetAny(),9999));
+  // Tcpsink_helper.SetAttribute("TotalRxSet", UintegerValue(num_edge_switch*num_host*maxBytes));
+  //  Tcpsink_helper.SetAttribute("PacketIntervalSet",UintegerValue(500));
+
   // Configure On-off applications between hosts
   for (size_t i = 0; i < hosts.GetN(); i++){
     for (size_t j = 0; j < hosts.GetN(); j++){

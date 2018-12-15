@@ -980,7 +980,7 @@ OFSwitch13Device::ReceiveFromController (Ptr<Packet> packet, Address from)
     }
 
   // Send the message to handler.
-  error = handle_control_msg (m_datapath, msg, &senderCtrl);
+  error = handle_control_msg_with_timestamp (m_datapath, msg, &senderCtrl, Simulator::Now().GetSeconds());
   if (error)
     {
       // It is assumed that if a handler returns with error, it did not use any

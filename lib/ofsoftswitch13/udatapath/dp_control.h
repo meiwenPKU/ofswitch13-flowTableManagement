@@ -46,8 +46,10 @@ struct sender;
 
 /* Dispatches or handles the incoming OpenFlow messages. */
 ofl_err
+handle_control_msg_with_timestamp(struct datapath *dp, struct ofl_msg_header *msg,const struct sender *sender, double time_stamp);
+
+ofl_err
 handle_control_msg(struct datapath *dp, struct ofl_msg_header *msg,
                    const struct sender *sender);
-
 
 #endif /* DP_CONTROL_H */

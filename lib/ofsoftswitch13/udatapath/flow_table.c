@@ -107,7 +107,7 @@ add_to_timeout_lists(struct flow_table *table, struct flow_entry *entry) {
 }
 
 /*Apply lru policy to evict an existing flow entry*/
-void lru_evict(struct flow_table *table) {
+void lru_evict(struct flow_table *table, double time_stamp) {
     struct flow_entry *entry;
     struct flow_entry *lru_entry = NULL;
     uint64_t lru_value = 0xffffffffffffffffUL;
@@ -125,7 +125,7 @@ void lru_evict(struct flow_table *table) {
     // print the lru entry (src addr, dst addr, src port, dst port, protocol) infomation for debugging
     //VLOG_DBG(LOG_MODULE, "Evict the flow entry:");
     msg = ofl_structs_oxm_match_to_string((struct ofl_match *)(lru_entry->stats->match));
-    VLOG_DBG(LOG_MODULE, "Evict the flow entry: %s", msg);
+    VLOG_DBG(LOG_MODULE, "t=%f, evict the flow entry: %s", time_stamp, msg);
     // evict the lru entry
     flow_entry_remove(lru_entry, OFPRR_EVICTION);
 }
@@ -153,10 +153,58 @@ flow_table_add(struct flow_table *table, struct ofl_msg_flow_mod *mod, bool chec
     // Note: new entries will be placed behind those with equal priority
     struct flow_entry *entry, *new_entry;
 
+    LIST_FOR_EACH (entry, struct flow_entry, match_node, &table->match_entries) {
+        if (check_overlap && flow_entry_overlaps(entry, mod)) {
+            return ofl_error(OFPET_FLOW_MOD_FAILED, OFPFMFC_OVERLAP);
+        }
+
+        /* if the entry equals, replace the old one */
+        if (flow_entry_matches(entry, mod, true/*strict*/, false/*check_cookie*/)) {
+            new_entry = flow_entry_create(table->dp, table, mod);
+            *match_kept = true;
+            *insts_kept = true;
+
+            /* NOTE: no flow removed message should be generated according to spec. */
+            list_replace(&new_entry->match_node, &entry->match_node);
+            list_remove(&entry->hard_node);
+            list_remove(&entry->idle_node);
+            flow_entry_destroy(entry);
+            add_to_timeout_lists(table, new_entry);
+            update_num_cap_miss(table, new_entry);
+            return 0;
+        }
+
+        if (mod->priority > entry->stats->priority) {
+            break;
+        }
+    }
+
+    table->stats->active_count++;
+    new_entry = flow_entry_create(table->dp, table, mod);
+    *match_kept = true;
+    *insts_kept = true;
+
+    if (table->stats->active_count == table->features->max_entries) {
+        return ofl_error(OFPET_FLOW_MOD_FAILED, OFPFMFC_TABLE_FULL);
+    }
+
+    list_insert(&entry->match_node, &new_entry->match_node);
+    add_to_timeout_lists(table, new_entry);
+    update_num_cap_miss(table, new_entry);
+    return 0;
+}
+
+
+/* Handles flow mod messages with ADD command. */
+static ofl_err
+flow_table_add_with_timestamp(struct flow_table *table, struct ofl_msg_flow_mod *mod, bool check_overlap, bool *match_kept, bool *insts_kept, double time_stamp) {
+    // Note: new entries will be placed behind those with equal priority
+    struct flow_entry *entry, *new_entry;
+
     if (table->stats->active_count == table->features->max_entries) {
         // implement flow entry eviction here, implement lru and ml policy
         // LRU eviction policy
-        lru_evict(table);
+        lru_evict(table, time_stamp);
         //return ofl_error(OFPET_FLOW_MOD_FAILED, OFPFMFC_TABLE_FULL);
     }
 
@@ -237,6 +285,31 @@ flow_table_flow_mod(struct flow_table *table, struct ofl_msg_flow_mod *mod, bool
         case (OFPFC_ADD): {
             bool overlap = ((mod->flags & OFPFF_CHECK_OVERLAP) != 0);
             return flow_table_add(table, mod, overlap, match_kept, insts_kept);
+        }
+        case (OFPFC_MODIFY): {
+            return flow_table_modify(table, mod, false, insts_kept);
+        }
+        case (OFPFC_MODIFY_STRICT): {
+            return flow_table_modify(table, mod, true, insts_kept);
+        }
+        case (OFPFC_DELETE): {
+            return flow_table_delete(table, mod, false);
+        }
+        case (OFPFC_DELETE_STRICT): {
+            return flow_table_delete(table, mod, true);
+        }
+        default: {
+            return ofl_error(OFPET_FLOW_MOD_FAILED, OFPFMFC_BAD_COMMAND);
+        }
+    }
+}
+
+ofl_err
+flow_table_flow_mod_with_timestamp(struct flow_table *table, struct ofl_msg_flow_mod *mod, bool *match_kept, bool *insts_kept, double time_stamp) {
+    switch (mod->command) {
+        case (OFPFC_ADD): {
+            bool overlap = ((mod->flags & OFPFF_CHECK_OVERLAP) != 0);
+            return flow_table_add_with_timestamp(table, mod, overlap, match_kept, insts_kept, time_stamp);
         }
         case (OFPFC_MODIFY): {
             return flow_table_modify(table, mod, false, insts_kept);

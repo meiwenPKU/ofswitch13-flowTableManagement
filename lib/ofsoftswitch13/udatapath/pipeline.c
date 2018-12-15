@@ -52,8 +52,8 @@
 #include "vlog.h"
 
 #if defined (__GNUC__) && defined (NS3_OFSWITCH13)
-    // Define send_packet_to_controller functions as weak, 
-    // so ns3 can override it configure the packet_in message. 
+    // Define send_packet_to_controller functions as weak,
+    // so ns3 can override it configure the packet_in message.
     #pragma weak send_packet_to_controller
 #endif
 
@@ -201,6 +201,93 @@ int inst_compare(const void *inst1, const void *inst2){
 }
 
 ofl_err
+pipeline_handle_flow_mod_with_timestamp(struct pipeline *pl, struct ofl_msg_flow_mod *msg, const struct sender *sender, double time_stamp) {
+    /* Note: the result of using table_id = OFPTT_ALL is undefined in the spec.
+     *       for now it is accepted for delete commands, meaning to delete
+     *       from all tables */
+    ofl_err error;
+    size_t i;
+    bool match_kept,insts_kept;
+
+    if(sender->remote->role == OFPCR_ROLE_SLAVE)
+        return ofl_error(OFPET_BAD_REQUEST, OFPBRC_IS_SLAVE);
+
+    if(msg->table_id >= pl->num_tables && msg->table_id != OFPTT_ALL)
+        return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_TABLE_ID);
+
+    match_kept = false;
+    insts_kept = false;
+
+    /*Sort by execution oder*/
+    qsort(msg->instructions, msg->instructions_num,
+        sizeof(struct ofl_instruction_header *), inst_compare);
+
+    // Validate actions in flow_mod
+    for (i=0; i< msg->instructions_num; i++) {
+        if (msg->instructions[i]->type == OFPIT_APPLY_ACTIONS ||
+            msg->instructions[i]->type == OFPIT_WRITE_ACTIONS) {
+            struct ofl_instruction_actions *ia = (struct ofl_instruction_actions *)msg->instructions[i];
+
+            error = dp_actions_validate(pl->dp, ia->actions_num, ia->actions);
+            if (error) {
+                return error;
+            }
+            error = dp_actions_check_set_field_req(msg, ia->actions_num, ia->actions);
+            if (error) {
+                return error;
+            }
+        }
+	/* Reject goto in the last table. */
+	if ((msg->table_id == (pl->num_tables - 1))
+	    && (msg->instructions[i]->type == OFPIT_GOTO_TABLE))
+	  return ofl_error(OFPET_BAD_INSTRUCTION, OFPBIC_UNSUP_INST);
+    }
+
+    if (msg->table_id == OFPTT_ALL) {
+        if (msg->command == OFPFC_DELETE || msg->command == OFPFC_DELETE_STRICT) {
+            size_t i;
+
+            error = 0;
+            for (i=0; i < pl->num_tables; i++) {
+                error = flow_table_flow_mod_with_timestamp(pl->tables[i], msg, &match_kept, &insts_kept, time_stamp);
+                if (error) {
+                    break;
+                }
+            }
+            if (error) {
+                return error;
+            } else {
+                ofl_msg_free_flow_mod(msg, !match_kept, !insts_kept, pl->dp->exp);
+                return 0;
+            }
+        } else {
+            return ofl_error(OFPET_FLOW_MOD_FAILED, OFPFMFC_BAD_TABLE_ID);
+        }
+    } else {
+        error = flow_table_flow_mod_with_timestamp(pl->tables[msg->table_id], msg, &match_kept, &insts_kept, time_stamp);
+        if (error) {
+            return error;
+        }
+        if ((msg->command == OFPFC_ADD || msg->command == OFPFC_MODIFY || msg->command == OFPFC_MODIFY_STRICT) &&
+                            msg->buffer_id != NO_BUFFER) {
+            /* run buffered message through pipeline */
+            struct packet *pkt;
+
+            pkt = dp_buffers_retrieve(pl->dp->buffers, msg->buffer_id);
+            if (pkt != NULL) {
+		      pipeline_process_packet(pl, pkt);
+            } else {
+                VLOG_WARN_RL(LOG_MODULE, &rl, "The buffer flow_mod referred to was empty (%u).", msg->buffer_id);
+            }
+        }
+
+        ofl_msg_free_flow_mod(msg, !match_kept, !insts_kept, pl->dp->exp);
+        return 0;
+    }
+
+}
+
+ofl_err
 pipeline_handle_flow_mod(struct pipeline *pl, struct ofl_msg_flow_mod *msg,
                                                 const struct sender *sender) {
     /* Note: the result of using table_id = OFPTT_ALL is undefined in the spec.
@@ -318,7 +405,7 @@ pipeline_handle_stats_request_flow(struct pipeline *pl,
                                    struct ofl_msg_multipart_request_flow *msg,
                                    const struct sender *sender) {
 
-    struct ofl_flow_stats **stats; 
+    struct ofl_flow_stats **stats;
     size_t stats_size = 1;
     size_t stats_num = 0;
 
@@ -687,4 +774,3 @@ execute_entry(struct pipeline *pl, struct flow_entry *entry,
         }
     }
 }
-

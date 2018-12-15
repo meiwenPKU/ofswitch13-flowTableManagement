@@ -1,5 +1,5 @@
 /* Copyright (c) 2011, TrafficLab, Ericsson Research, Hungary
- * Copyright (c) 2012, CPqD, Brazil  
+ * Copyright (c) 2012, CPqD, Brazil
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -62,7 +62,7 @@ struct pipeline *
 pipeline_create(struct datapath *dp);
 
 #if defined (__GNUC__) && defined (NS3_OFSWITCH13)
-/* Sends a packet to the controller in a packet_in message. 
+/* Sends a packet to the controller in a packet_in message.
  * This signature is necessary here only when compiling the ns3 library. */
 void
 send_packet_to_controller(struct pipeline *pl, struct packet *pkt, uint8_t table_id, uint8_t reason);
@@ -74,6 +74,8 @@ pipeline_process_packet(struct pipeline *pl, struct packet *pkt);
 
 
 /* Handles a flow_mod message. */
+ofl_err
+pipeline_handle_flow_mod_with_timestamp(struct pipeline *pl, struct ofl_msg_flow_mod *msg, const struct sender *sender, double time_stamp);
 ofl_err
 pipeline_handle_flow_mod(struct pipeline *pl, struct ofl_msg_flow_mod *msg,
                          const struct sender *sender);

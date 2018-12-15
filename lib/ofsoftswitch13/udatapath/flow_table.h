@@ -71,6 +71,8 @@ extern struct ofl_instruction_header instructions[];
 extern struct ofl_action_header actions[];
 /* Handles a flow mod message. */
 ofl_err
+flow_table_flow_mod_with_timestamp(struct flow_table *table, struct ofl_msg_flow_mod *mod, bool *match_kept, bool *insts_kept, double time_stamp);
+ofl_err
 flow_table_flow_mod(struct flow_table *table, struct ofl_msg_flow_mod *mod, bool *match_kept, bool *insts_kept);
 
 /* Finds the flow entry with the highest priority, which matches the packet. */
@@ -100,7 +102,7 @@ flow_table_aggregate_stats(struct flow_table *table, struct ofl_msg_multipart_re
                            uint64_t *packet_count, uint64_t *byte_count, uint32_t *flow_count);
 
 /*Apply lru policy to evict the least recently used flow entry from the given flow table*/
-void lru_evict(struct flow_table *table);
+void lru_evict(struct flow_table *table, double time_stamp);
 
 /*Update the number of capacity misses if applicable*/
 void update_num_cap_miss(struct flow_table *table, struct flow_entry *entry);
