@@ -10,6 +10,8 @@ This script is used to simulate the topology where multiple hosts are connected 
 #include <ns3/internet-apps-module.h>
 #include <ns3/on-off-helper.h>
 #include <ns3/tap-bridge-module.h>
+#include <ns3/flow-monitor-helper.h>
+#include <ns3/packet-sink-helper.h>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -36,16 +38,18 @@ main (int argc, char *argv[])
     {
       ns3::ofs::EnableLibraryLog (true, "", false, "");
       //OFSwitch13Helper::EnableDatapathLogs ();
-      LogComponentEnable ("Single_Switch", LOG_LEVEL_ALL);
-      LogComponentEnable ("OFSwitch13Interface", LOG_LEVEL_ALL);
-      LogComponentEnable ("OFSwitch13Device", LOG_LEVEL_ALL);
-      LogComponentEnable ("OFSwitch13Port", LOG_LEVEL_ALL);
-      LogComponentEnable ("OFSwitch13Queue", LOG_LEVEL_ALL);
-      LogComponentEnable ("OFSwitch13SocketHandler", LOG_LEVEL_ALL);
-      LogComponentEnable ("OFSwitch13Controller", LOG_LEVEL_ALL);
-      LogComponentEnable ("OFSwitch13LearningController", LOG_LEVEL_ALL);
-      LogComponentEnable ("OFSwitch13Helper", LOG_LEVEL_ALL);
-      LogComponentEnable ("OFSwitch13InternalHelper", LOG_LEVEL_ALL);
+      LogComponentEnable ("Single_Switch", LOG_LEVEL_INFO);
+      LogComponentEnable ("OFSwitch13Interface", LOG_LEVEL_INFO);
+      LogComponentEnable ("OFSwitch13Device", LOG_LEVEL_INFO);
+      LogComponentEnable ("OFSwitch13Port", LOG_LEVEL_INFO);
+      LogComponentEnable ("OFSwitch13Queue", LOG_LEVEL_INFO);
+      LogComponentEnable ("OFSwitch13SocketHandler", LOG_LEVEL_INFO);
+      LogComponentEnable ("OFSwitch13Controller", LOG_LEVEL_INFO);
+      LogComponentEnable ("OFSwitch13LearningController", LOG_LEVEL_INFO);
+      LogComponentEnable ("OFSwitch13Helper", LOG_LEVEL_INFO);
+      LogComponentEnable ("OFSwitch13InternalHelper", LOG_LEVEL_INFO);
+      LogComponentEnable ("OnOffApplication", LOG_LEVEL_INFO);
+      LogComponentEnable ("PacketSink", LOG_LEVEL_INFO);
     }
 
   // Enable checksum computations (required by OFSwitch13 module)
@@ -128,7 +132,7 @@ main (int argc, char *argv[])
 
   Ptr<UniformRandomVariable> random_num_generator = CreateObject<UniformRandomVariable>();
 
-  double tcpProb = 0.673657;
+  double tcpProb = 0.67;
   double startTime = 10;
   double endTime = 10;
 
@@ -138,8 +142,13 @@ main (int argc, char *argv[])
   outputFile.open(filename);
   outputFile << "srcAddr, srcPort, dstAddr, dstPort, startTime, endTime\n";
 
-  // ApplicationContainer sink_apps;
-  // PacketSinkHelper Tcpsink_helper("ns3::TcpSocketFactory",InetSocketAddress(Ipv4Address::GetAny(),9999));
+  ApplicationContainer tcp_sink_apps;
+  ApplicationContainer udp_sink_apps;
+  PacketSinkHelper Tcpsink_helper("ns3::TcpSocketFactory",InetSocketAddress(Ipv4Address::GetAny(),9999));
+  PacketSinkHelper Udpsink_helper("ns3::UdpSocketFactory",InetSocketAddress(Ipv4Address::GetAny(),9999));
+  tcp_sink_apps.Add(Tcpsink_helper.Install(hosts));
+  udp_sink_apps.Add(Udpsink_helper.Install(hosts));
+
   // Tcpsink_helper.SetAttribute("TotalRxSet", UintegerValue(num_edge_switch*num_host*maxBytes));
   //  Tcpsink_helper.SetAttribute("PacketIntervalSet",UintegerValue(500));
 
@@ -172,10 +181,12 @@ main (int argc, char *argv[])
       if (endTime > simTime){
         simTime = endTime;
       }
-      on_off_helper.SetAttribute("StartTime", ns3::TimeValue(Time(startTime)));
-      on_off_helper.SetAttribute("StopTime", ns3::TimeValue(Time(endTime)));
+      //on_off_helper.SetAttribute("StartTime", ns3::TimeValue(Time(startTime)));
+      //on_off_helper.SetAttribute("StopTime", ns3::TimeValue(Time(endTime)));
       ApplicationContainer on_off_app;
       on_off_app = on_off_helper.Install(hosts.Get(i));
+      on_off_app.Start(Seconds(startTime));
+      on_off_app.Stop(Seconds(endTime));
       hostIpIfaces.GetAddress(i).Print(outputFile);
       outputFile << "," << 9999 << ",";
       hostIpIfaces.GetAddress(j).Print(outputFile);
@@ -183,7 +194,10 @@ main (int argc, char *argv[])
     }
   }
   outputFile.close();
+  udp_sink_apps.Start(Seconds(10.0));
+  tcp_sink_apps.Start(Seconds(10.0));
 
+  NS_LOG_INFO("The total simulation time=" << simTime);
   // Enable datapath stats and pcap traces at hosts, switch(es), and controller(s)
   if (trace)
     {
@@ -193,8 +207,34 @@ main (int argc, char *argv[])
       csmaHelper.EnablePcap ("host", hostDevices);
     }
 
+  Ptr<FlowMonitor> flowMonitor;
+  FlowMonitorHelper flowHelper;
+  flowMonitor = flowHelper.Install(hosts);
   // Run the simulation
   Simulator::Stop (Seconds (simTime+10));
-  Simulator::Run ();
+
+  // uint32_t totalRx = 0;
+  // TIMER_NOW (t1);
+  Simulator::Run();
+  flowMonitor->SerializeToXmlFile("simulationResults/flowTransStats.xml", true, true);
+  // TIMER_NOW (t2);
+  //
+  // // collect the stats
+  // for (uint32_t i = 0; i < sink_apps.GetN(); ++i)
+  // {
+  //  Ptr<PacketSink> sink_app = DynamicCast<PacketSink> (sink_apps.Get (i));
+  //  if (sink_app)
+  //    {
+  //          totalRx += sink_app->GetTotalRx();
+  //    }
+  // }
+  //
+  // double simulate_time = TIMER_DIFF (t1, t0) + TIMER_DIFF (t2, t1);
+  // Ptr<PacketSink> sink_app = DynamicCast<PacketSink> (sink_apps.Get (0));
+  // // std::cout << "total received bytes = " << totalRx << std::endl;
+  // // std::cout << "total sended bytes = " << maxBytes * num_access_switch * num_host << std::endl;
+  // // std::cout << "total simulation time = " << simulate_time << std::endl;
+  // std::cout << totalRx << " " << maxBytes * num_edge_switch * num_host << " " << TIMER_DIFF (sink1->GetLastRxWallClockTime(), t0) << " " << sink1->GetLastRxSimTime() << " " << simulate_time << " " << Simulator::Now().GetSeconds() << std::endl;
+
   Simulator::Destroy ();
 }

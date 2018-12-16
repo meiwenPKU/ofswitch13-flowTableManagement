@@ -5,5 +5,5 @@ make
 
 cd ../../../../
 sudo rm -r build/
-./waf configure --enable-examples --enable-tests --enable-sudo
-./waf
+sudo ./waf configure --enable-examples --enable-tests
+sudo ./waf
