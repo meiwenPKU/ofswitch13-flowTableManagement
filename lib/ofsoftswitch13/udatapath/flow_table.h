@@ -37,7 +37,7 @@
 #include "timeval.h"
 
 
-#define FLOW_TABLE_MAX_ENTRIES 20
+#define FLOW_TABLE_MAX_ENTRIES 1024
 #define TABLE_FEATURES_NUM 14
 
 /****************************************************************************

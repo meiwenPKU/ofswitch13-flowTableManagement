@@ -43,8 +43,8 @@ int
 main (int argc, char *argv[])
 {
   uint16_t simTime = 10;
-  bool verbose = false;
-  bool trace = false;
+  bool verbose = true;
+  bool trace = true;
 
   // Configure command line parameters
   CommandLine cmd;
@@ -66,6 +66,8 @@ main (int argc, char *argv[])
       LogComponentEnable ("OFSwitch13LearningController", LOG_LEVEL_ALL);
       LogComponentEnable ("OFSwitch13Helper", LOG_LEVEL_ALL);
       LogComponentEnable ("OFSwitch13ExternalHelper", LOG_LEVEL_ALL);
+      LogComponentEnable ("TcpSocketBase", LOG_LEVEL_ALL);
+
     }
 
   // Enable checksum computations (required by OFSwitch13 module)

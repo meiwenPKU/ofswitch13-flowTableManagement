@@ -31,5 +31,11 @@ def build(bld):
     obj = bld.create_ns3_program('ofswitch13-single-switch-externalController', ['ofswitch13', 'internet-apps', 'tap-bridge', 'flow-monitor'])
     obj.source = 'single-switch-externalController.cc'
 
-    # obj = bld.create_ns3_program('ofswitch13-datacenter-externalController', ['ofswitch13', 'internet-apps', 'tap-bridge', 'flow-monitor'])
-    # obj.source = 'datacenter-externalController.cc'
+    obj = bld.create_ns3_program('ofswitch13-datacenter-externalController', ['ofswitch13', 'internet-apps', 'tap-bridge', 'flow-monitor'])
+    obj.source = 'datacenter-externalController.cc'
+
+    obj = bld.create_ns3_program('ofswitch13-linear-externalController', ['ofswitch13', 'internet-apps', 'tap-bridge', 'flow-monitor'])
+    obj.source = 'linear-externalController.cc'
+
+    obj = bld.create_ns3_program('ofswitch13-linear-externalController-v2', ['ofswitch13', 'internet-apps', 'tap-bridge', 'flow-monitor'])
+    obj.source = 'linear-externalController-v2.cc'

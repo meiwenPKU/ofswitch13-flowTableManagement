@@ -30,6 +30,7 @@
 
 #include <stdbool.h>
 #include <string.h>
+#include <stdio.h>
 #include "dynamic-string.h"
 #include "datapath.h"
 #include "flow_table.h"
@@ -125,7 +126,8 @@ void lru_evict(struct flow_table *table, double time_stamp) {
     // print the lru entry (src addr, dst addr, src port, dst port, protocol) infomation for debugging
     //VLOG_DBG(LOG_MODULE, "Evict the flow entry:");
     msg = ofl_structs_oxm_match_to_string((struct ofl_match *)(lru_entry->stats->match));
-    VLOG_DBG(LOG_MODULE, "t=%f, evict the flow entry: %s", time_stamp, msg);
+    //printf ("t=%f, evict the flow entry: %s\n", time_stamp, msg);
+    VLOG_WARN(LOG_MODULE, "t=%f, evict the flow entry: %s", time_stamp, msg);
     // evict the lru entry
     flow_entry_remove(lru_entry, OFPRR_EVICTION);
 }
@@ -140,7 +142,8 @@ void update_num_cap_miss(struct flow_table *table, struct flow_entry *entry){
   if (hmap_first_with_hash(&table->all_installed_entries, hash_value) != NULL){
     // the flow entry was installed before
     table->numCapMiss ++;
-    VLOG_DBG(LOG_MODULE, "numCapMiss=%d", table->numCapMiss);
+    //printf("numCapMiss=%d\n", table->numCapMiss);
+    VLOG_WARN(LOG_MODULE, "numCapMiss=%d", table->numCapMiss);
   } else {
     // insert the hash value to the hmap
     hmap_insert(&table->all_installed_entries, node, hash_value);

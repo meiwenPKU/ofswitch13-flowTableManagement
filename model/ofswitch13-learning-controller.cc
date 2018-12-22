@@ -41,10 +41,9 @@ TypeId
 OFSwitch13LearningController::GetTypeId (void)
 {
   static TypeId tid = TypeId ("ns3::OFSwitch13LearningController")
-    .SetParent<OFSwitch13Controller> ()
-    .SetGroupName ("OFSwitch13")
-    .AddConstructor<OFSwitch13LearningController> ()
-  ;
+                          .SetParent<OFSwitch13Controller> ()
+                          .SetGroupName ("OFSwitch13")
+                          .AddConstructor<OFSwitch13LearningController> ();
   return tid;
 }
 
@@ -58,9 +57,8 @@ OFSwitch13LearningController::DoDispose ()
 }
 
 ofl_err
-OFSwitch13LearningController::HandlePacketIn (
-  struct ofl_msg_packet_in *msg, Ptr<const RemoteSwitch> swtch,
-  uint32_t xid)
+OFSwitch13LearningController::HandlePacketIn (struct ofl_msg_packet_in *msg,
+                                              Ptr<const RemoteSwitch> swtch, uint32_t xid)
 {
   NS_LOG_FUNCTION (this << swtch << xid);
 
@@ -69,8 +67,7 @@ OFSwitch13LearningController::HandlePacketIn (
   uint64_t dpId = swtch->GetDpId ();
   enum ofp_packet_in_reason reason = msg->reason;
 
-  char *msgStr =
-    ofl_structs_match_to_string ((struct ofl_match_header*)msg->match, 0);
+  char *msgStr = ofl_structs_match_to_string ((struct ofl_match_header *) msg->match, 0);
   NS_LOG_DEBUG ("Packet in match: " << msgStr);
   free (msgStr);
 
@@ -80,17 +77,17 @@ OFSwitch13LearningController::HandlePacketIn (
       uint32_t inPort;
       size_t portLen = OXM_LENGTH (OXM_OF_IN_PORT); // (Always 4 bytes)
       struct ofl_match_tlv *input =
-        oxm_match_lookup (OXM_OF_IN_PORT, (struct ofl_match*)msg->match);
+          oxm_match_lookup (OXM_OF_IN_PORT, (struct ofl_match *) msg->match);
       memcpy (&inPort, input->value, portLen);
 
       Mac48Address src48;
       struct ofl_match_tlv *ethSrc =
-        oxm_match_lookup (OXM_OF_ETH_SRC, (struct ofl_match*)msg->match);
+          oxm_match_lookup (OXM_OF_ETH_SRC, (struct ofl_match *) msg->match);
       src48.CopyFrom (ethSrc->value);
 
       Mac48Address dst48;
       struct ofl_match_tlv *ethDst =
-        oxm_match_lookup (OXM_OF_ETH_DST, (struct ofl_match*)msg->match);
+          oxm_match_lookup (OXM_OF_ETH_DST, (struct ofl_match *) msg->match);
       dst48.CopyFrom (ethDst->value);
 
       // Get L2Table for this datapath
@@ -118,32 +115,29 @@ OFSwitch13LearningController::HandlePacketIn (
           L2Table_t::iterator itSrc = l2Table->find (src48);
           if (itSrc == l2Table->end ())
             {
-              std::pair <L2Table_t::iterator, bool> ret;
-              ret = l2Table->insert (
-                  std::pair<Mac48Address, uint32_t> (src48, inPort));
+              std::pair<L2Table_t::iterator, bool> ret;
+              ret = l2Table->insert (std::pair<Mac48Address, uint32_t> (src48, inPort));
               if (ret.second == false)
                 {
                   NS_LOG_ERROR ("Can't insert mac48address / port pair");
                 }
               else
                 {
-                  NS_LOG_DEBUG ("Learning that mac " << src48 <<
-                                " can be found at port " << inPort);
+                  NS_LOG_DEBUG ("Learning that mac " << src48 << " can be found at port "
+                                                     << inPort);
 
                   // Send a flow-mod to switch creating this flow. Let's
                   // configure the flow entry to 10s idle timeout and to
                   // notify the controller when flow expires. (flags=0x0001)
                   std::ostringstream cmd;
                   cmd << "flow-mod cmd=add,table=0,idle=10,flags=0x0001"
-                      << ",prio=" << ++prio << " eth_dst=" << src48
-                      << " apply:output=" << inPort;
+                      << ",prio=" << ++prio << " eth_dst=" << src48 << " apply:output=" << inPort;
                   DpctlExecute (swtch, cmd.str ());
                 }
             }
           else
             {
-              NS_ASSERT_MSG (itSrc->second == inPort,
-                             "Inconsistent L2 switching table");
+              NS_ASSERT_MSG (itSrc->second == inPort, "Inconsistent L2 switching table");
             }
         }
       else
@@ -168,15 +162,15 @@ OFSwitch13LearningController::HandlePacketIn (
 
       // Create output action
       struct ofl_action_output *a =
-        (struct ofl_action_output*)xmalloc (sizeof (struct ofl_action_output));
+          (struct ofl_action_output *) xmalloc (sizeof (struct ofl_action_output));
       a->header.type = OFPAT_OUTPUT;
       a->port = outPort;
       a->max_len = 0;
 
       reply.actions_num = 1;
-      reply.actions = (struct ofl_action_header**)&a;
+      reply.actions = (struct ofl_action_header **) &a;
 
-      SendToSwitch (swtch, (struct ofl_msg_header*)&reply, xid);
+      SendToSwitch (swtch, (struct ofl_msg_header *) &reply, xid);
       free (a);
     }
   else
@@ -185,25 +179,24 @@ OFSwitch13LearningController::HandlePacketIn (
     }
 
   // All handlers must free the message when everything is ok
-  ofl_msg_free ((struct ofl_msg_header*)msg, 0);
+  ofl_msg_free ((struct ofl_msg_header *) msg, 0);
   return 0;
 }
 
 ofl_err
-OFSwitch13LearningController::HandleFlowRemoved (
-  struct ofl_msg_flow_removed *msg, Ptr<const RemoteSwitch> swtch,
-  uint32_t xid)
+OFSwitch13LearningController::HandleFlowRemoved (struct ofl_msg_flow_removed *msg,
+                                                 Ptr<const RemoteSwitch> swtch, uint32_t xid)
 {
   NS_LOG_FUNCTION (this << swtch << xid);
 
-  NS_LOG_DEBUG ( "Flow entry expired. Removing from L2 switch table.");
+  NS_LOG_DEBUG ("Flow entry expired. Removing from L2 switch table.");
   uint64_t dpId = swtch->GetDpId ();
   DatapathMap_t::iterator it = m_learnedInfo.find (dpId);
   if (it != m_learnedInfo.end ())
     {
       Mac48Address mac48;
       struct ofl_match_tlv *ethSrc =
-        oxm_match_lookup (OXM_OF_ETH_DST, (struct ofl_match*)msg->stats->match);
+          oxm_match_lookup (OXM_OF_ETH_DST, (struct ofl_match *) msg->stats->match);
       mac48.CopyFrom (ethSrc->value);
 
       L2Table_t *l2Table = &it->second;
@@ -221,8 +214,7 @@ OFSwitch13LearningController::HandleFlowRemoved (
 
 /********** Private methods **********/
 void
-OFSwitch13LearningController::HandshakeSuccessful (
-  Ptr<const RemoteSwitch> swtch)
+OFSwitch13LearningController::HandshakeSuccessful (Ptr<const RemoteSwitch> swtch)
 {
   NS_LOG_FUNCTION (this << swtch);
 
@@ -230,7 +222,7 @@ OFSwitch13LearningController::HandshakeSuccessful (
   // to 128 bytes the maximum amount of data from a packet that should be sent
   // to the controller.
   DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=0 "
-                "apply:output=ctrl:128");
+                       "apply:output=ctrl:128");
 
   // Configure te switch to buffer packets and send only the first 128 bytes of
   // each packet sent to the controller when not using an output action to the
@@ -241,8 +233,8 @@ OFSwitch13LearningController::HandshakeSuccessful (
   L2Table_t l2Table;
   uint64_t dpId = swtch->GetDpId ();
 
-  std::pair <DatapathMap_t::iterator, bool> ret;
-  ret =  m_learnedInfo.insert (std::pair<uint64_t, L2Table_t> (dpId, l2Table));
+  std::pair<DatapathMap_t::iterator, bool> ret;
+  ret = m_learnedInfo.insert (std::pair<uint64_t, L2Table_t> (dpId, l2Table));
   if (ret.second == false)
     {
       NS_LOG_ERROR ("Table exists for this datapath.");
