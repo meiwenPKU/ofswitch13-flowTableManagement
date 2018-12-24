@@ -159,13 +159,42 @@ void ml_evict(struct flow_table *table, double time_stamp) {
   int inactive_count = 0;
   double prob = 0.7;
   char* msg = NULL;
+  FILE* stream;
+  char *src, *dst, *end, *key;
+  struct hmap_node* node;
+  size_t hash_value;
+  char line[1024];
+
+  /* Init flow stats */
+  if (!table->initiated)
+    {
+      hmap_init(&table->flow_stats);
+      table->initiated = true;
+      stream = fopen ("/home/yang/ns-3.29/simulationResults/flowStats.csv", "r");
+      while (fgets (line, 1024, stream))
+        {
+          src = strtok (line, ",");
+          dst = strtok (NULL, ",");
+          end = strtok (NULL, ",");
+
+          node = malloc (sizeof (struct hmap_node));
+          key = malloc (strlen (src) + strlen (dst) + 1);
+          sprintf (key, "%s-%s", src, dst);
+          hash_value = hash_string (key, 0);
+          node->value = atof (end);
+          //printf ("src=%s, dst=%s, end=%f, hash_value=%zu", src, dst, node->value, hash_value);
+          hmap_insert (&table->flow_stats, node, hash_value);
+        }
+      fclose (stream);
+    }
+
   LIST_FOR_EACH (entry, struct flow_entry, match_node, &table->match_entries){
     // loop through each entry
     // get the src ip and dst ip of the entry
     char* key = get_ipv4_key((struct ofl_match *)(entry->stats->match));
     size_t hash_value = hash_string(key, 0);
     struct hmap_node* node = hmap_first_with_hash(&(table->flow_stats), hash_value);
-    if (node->value < time_stamp + 2){
+    if (node != NULL && node->value < time_stamp + 2){
       // this flow is inactive now
       active_count ++;
       if (rand() % active_count < 1){
@@ -595,12 +624,6 @@ struct flow_table *
 flow_table_create(struct pipeline *pl, uint8_t table_id) {
     struct flow_table *table;
     struct ds string = DS_EMPTY_INITIALIZER;
-    FILE* stream;
-    char *src, *dst, *end, *key;
-    struct hmap_node* node;
-    size_t hash_value;
-    char line[1024];
-
 
     ds_put_format(&string, "table_%u", table_id);
 
@@ -617,6 +640,8 @@ flow_table_create(struct pipeline *pl, uint8_t table_id) {
     table->stats->lookup_count  = 0;
     table->stats->matched_count = 0;
 
+    table->initiated = false;
+
     /* Init Table features */
     table->features = xmalloc(sizeof(struct ofl_table_features));
     table->features->table_id = table_id;
@@ -626,22 +651,6 @@ flow_table_create(struct pipeline *pl, uint8_t table_id) {
     table->features->config        = OFPTC_DEPRECATED_MASK;
     table->features->max_entries   = FLOW_TABLE_MAX_ENTRIES;
     table->features->properties_num = flow_table_features(pl, table->features);
-
-    /* Init flow stats */
-    stream = fopen("/home/yang/ns-3.29/simulationResults/flowStats.csv", "r");
-    while (fgets(line, 1024, stream)){
-      src = strtok(line, ",");
-      dst = strtok (NULL, ",");
-      end = strtok (NULL, ",");
-
-      node = malloc(sizeof(struct hmap_node));
-      key = malloc(strlen(src)+strlen(dst)+1);
-      sprintf(key, "%s-%s", src, dst);
-      hash_value = hash_string(key, 0);
-      node->value = atof(end);
-      hmap_insert(&table->flow_stats, node, hash_value);
-    }
-    fclose(stream);
 
     list_init(&table->match_entries);
     list_init(&table->hard_entries);

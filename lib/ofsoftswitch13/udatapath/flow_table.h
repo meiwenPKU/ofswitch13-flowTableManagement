@@ -62,6 +62,7 @@ struct flow_table {
     uint32_t                  numCapMiss;      /*number of capacity misses */
     /*store the start and end time for each flows, such that we can simulate the behavior of ML approach*/
     struct hmap               flow_stats;
+    bool                      initiated;
 };
 
 extern uint32_t oxm_ids[];
