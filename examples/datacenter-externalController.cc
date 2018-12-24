@@ -204,10 +204,10 @@ main (int argc, char *argv[])
   NS_LOG_INFO (" Finished Assign IP Address");
 
   // create a csv file which contains all on-off flows' stats, including src addr, src port, dst addr, dst port, start time, end time
-  std::string filename = "/home/yang/ns-3.29/simulationResults/flowStats-datacenter.csv";
+  std::string filename = "/home/yang/ns-3.29/simulationResults/flowStats.csv";
   std::ofstream outputFile;
   outputFile.open (filename);
-  outputFile << "srcAddr, srcPort, dstAddr, dstPort, startTime, endTime\n";
+  //outputFile << "srcAddr, srcPort, dstAddr, dstPort, startTime, endTime\n";
 
   //-------------install packet sink apps on all host nodes
   ApplicationContainer tcp_sink_apps;
@@ -294,9 +294,9 @@ main (int argc, char *argv[])
                   on_off_app.Start (Seconds (startTime));
                   on_off_app.Stop (Seconds (endTime));
                   internetIpIfaces.GetAddress (i * num_host + j).Print (outputFile);
-                  outputFile << "," << 9999 << ",";
+                  outputFile << ",";
                   internetIpIfaces.GetAddress (i_remote * num_host + j_remote).Print (outputFile);
-                  outputFile << "," << 9999 << "," << startTime << "," << endTime << "\n";
+                  outputFile << "," << endTime << "\n";
                 }
             }
         }

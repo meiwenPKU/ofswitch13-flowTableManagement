@@ -60,6 +60,8 @@ struct flow_table {
     /*map of all installed flow entries, where a flow entry is defined by its match fields. This is used to cacluate the capacity misses of flow table*/
     struct hmap               all_installed_entries;
     uint32_t                  numCapMiss;      /*number of capacity misses */
+    /*store the start and end time for each flows, such that we can simulate the behavior of ML approach*/
+    struct hmap               flow_stats;
 };
 
 extern uint32_t oxm_ids[];
@@ -106,5 +108,10 @@ void lru_evict(struct flow_table *table, double time_stamp);
 
 /*Update the number of capacity misses if applicable*/
 void update_num_cap_miss(struct flow_table *table, struct flow_entry *entry);
+
+char* get_ipv4_key (struct ofl_match *omt);
+
+/* Apply ml policy to evict an existing flow entry */
+void ml_evict(struct flow_table *table, double time_stamp);
 
 #endif /* FLOW_TABLE_H */

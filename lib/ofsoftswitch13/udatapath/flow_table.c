@@ -107,6 +107,95 @@ add_to_timeout_lists(struct flow_table *table, struct flow_entry *entry) {
     }
 }
 
+/* get the ip address key: src ipv4-dst ipv4. For example, 1.1.1.1-2.2.2.2 */
+char* get_ipv4_key (struct ofl_match *omt){
+  struct ofl_match_tlv   *f;
+  int i;
+  uint8_t src_octet[4];
+  uint8_t dst_octet[4];
+  uint8_t field;
+  uint32_t *ip;
+  char *key;
+  size_t key_size;
+  FILE *stream = open_memstream(&key, &key_size);
+  for (i = 0; i< NUM_OXM_FIELDS; i++) {
+    f = oxm_match_lookup(all_fields[i].header, omt);
+    if (f != NULL) {
+      if (OXM_HASMASK(f->header)) {
+        //TODO: will support ip address with mask in the future
+        continue;
+      }
+      field = OXM_FIELD(f->header);
+      switch (field) {
+        case OFPXMT_OFB_IPV4_DST:
+          ip = (uint32_t *) (f->value);
+          for (int i = 0; i < 4; i++){
+            src_octet[i] = ((*ip) >> (i*8)) & 0xff;
+          }
+    			break;
+    		case OFPXMT_OFB_IPV4_SRC:
+          ip = (uint32_t *) (f->value);
+          for (int i = 0; i < 4; i++){
+            dst_octet[i] = ((*ip) >> (i*8)) & 0xff;
+          }
+    			break;
+        default:
+          break;
+      }
+    }
+  }
+  fprintf(stream, "%d.%d.%d.%d-%d.%d.%d.%d", src_octet[3], src_octet[2], src_octet[1], src_octet[0], dst_octet[3], dst_octet[2], dst_octet[1], dst_octet[0]);
+  fclose(stream);
+  return key;
+}
+
+/* Apply ml policy to evict an existing flow entry */
+void ml_evict(struct flow_table *table, double time_stamp) {
+  struct flow_entry *entry;
+  struct flow_entry *active_entry = NULL;
+  struct flow_entry *inactive_entry = NULL;
+  struct flow_entry *evict_entry = NULL;
+  int active_count = 0;
+  int inactive_count = 0;
+  double prob = 0.7;
+  char* msg = NULL;
+  LIST_FOR_EACH (entry, struct flow_entry, match_node, &table->match_entries){
+    // loop through each entry
+    // get the src ip and dst ip of the entry
+    char* key = get_ipv4_key((struct ofl_match *)(entry->stats->match));
+    size_t hash_value = hash_string(key, 0);
+    struct hmap_node* node = hmap_first_with_hash(&(table->flow_stats), hash_value);
+    if (node->value < time_stamp + 2){
+      // this flow is inactive now
+      active_count ++;
+      if (rand() % active_count < 1){
+        active_entry = entry;
+      }
+    } else {
+      // this flow is active flow
+      inactive_count ++;
+      if (rand() % inactive_count < 1){
+        inactive_entry = entry;
+      }
+    }
+  }
+  if (active_entry == NULL){
+    evict_entry = inactive_entry;
+  } else if (inactive_entry == NULL){
+    evict_entry = active_entry;
+  } else if (rand() % 1000 < prob*1000){
+    evict_entry = inactive_entry;
+  } else {
+    evict_entry = active_entry;
+  }
+  //VLOG_DBG(LOG_MODULE, "Evict the flow entry:");
+  msg = ofl_structs_oxm_match_to_string((struct ofl_match *)(evict_entry->stats->match));
+  //printf ("t=%f, evict the flow entry: %s\n", time_stamp, msg);
+  VLOG_WARN(LOG_MODULE, "t=%f, evict the flow entry: %s", time_stamp, msg);
+  // evict the lru entry
+  flow_entry_remove(evict_entry, OFPRR_EVICTION);
+}
+
 /*Apply lru policy to evict an existing flow entry*/
 void lru_evict(struct flow_table *table, double time_stamp) {
     struct flow_entry *entry;
@@ -207,7 +296,8 @@ flow_table_add_with_timestamp(struct flow_table *table, struct ofl_msg_flow_mod 
     if (table->stats->active_count == table->features->max_entries) {
         // implement flow entry eviction here, implement lru and ml policy
         // LRU eviction policy
-        lru_evict(table, time_stamp);
+        //lru_evict(table, time_stamp);
+        ml_evict (table, time_stamp);
         //return ofl_error(OFPET_FLOW_MOD_FAILED, OFPFMFC_TABLE_FULL);
     }
 
@@ -500,10 +590,17 @@ flow_table_features(struct pipeline *pl, struct ofl_table_features *features){
     return j;
 }
 
+
 struct flow_table *
 flow_table_create(struct pipeline *pl, uint8_t table_id) {
     struct flow_table *table;
     struct ds string = DS_EMPTY_INITIALIZER;
+    FILE* stream;
+    char *src, *dst, *end, *key;
+    struct hmap_node* node;
+    size_t hash_value;
+    char line[1024];
+
 
     ds_put_format(&string, "table_%u", table_id);
 
@@ -529,6 +626,22 @@ flow_table_create(struct pipeline *pl, uint8_t table_id) {
     table->features->config        = OFPTC_DEPRECATED_MASK;
     table->features->max_entries   = FLOW_TABLE_MAX_ENTRIES;
     table->features->properties_num = flow_table_features(pl, table->features);
+
+    /* Init flow stats */
+    stream = fopen("/home/yang/ns-3.29/simulationResults/flowStats.csv", "r");
+    while (fgets(line, 1024, stream)){
+      src = strtok(line, ",");
+      dst = strtok (NULL, ",");
+      end = strtok (NULL, ",");
+
+      node = malloc(sizeof(struct hmap_node));
+      key = malloc(strlen(src)+strlen(dst)+1);
+      sprintf(key, "%s-%s", src, dst);
+      hash_value = hash_string(key, 0);
+      node->value = atof(end);
+      hmap_insert(&table->flow_stats, node, hash_value);
+    }
+    fclose(stream);
 
     list_init(&table->match_entries);
     list_init(&table->hard_entries);

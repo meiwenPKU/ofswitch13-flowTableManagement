@@ -41,6 +41,7 @@
 /* A hash map node, to be embedded inside the data structure being mapped. */
 struct hmap_node {
     size_t hash;                /* Hash value. */
+    double value;               /* Value of the node */
     struct hmap_node *next;     /* Next in linked list. */
 };
 
@@ -62,7 +63,7 @@ struct hmap {
 #define HMAP_INITIALIZER(HMAP) { &(HMAP)->one, NULL, 0, 0 }
 
 #define HMAP_NODE_NULL ((struct hmap_node *) 1)
-#define HMAP_NODE_NULL_INITIALIZER { 0, HMAP_NODE_NULL }
+#define HMAP_NODE_NULL_INITIALIZER { 0, 0, HMAP_NODE_NULL }
 
 
 /* Initialization. */
