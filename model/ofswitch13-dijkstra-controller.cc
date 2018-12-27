@@ -159,140 +159,91 @@ OFSwitch13DijkstraController::HandlePacketIn (ofl_msg_packet_in *msg, Ptr<const 
       //find the route
       dest_route this_dest_route = m_routes.find (src_dpId)->second;
       route this_route = this_dest_route.find (dst_dpId)->second;
+      // install routes to switches
+      if (this_route.size() == 0){
+        NS_LOG_ERROR ("No route exists");
+        return ofl_error(OFPET_FLOW_MOD_FAILED, OFPFMFC_UNKNOWN);
+      }
+      if (src_dpId != dpId){
+        // this switch is not the source, wait for the src switch to install the flow entries
+        NS_LOG_INFO ("This switch is not the source of the route");
+        return 0;
+      }
       uint32_t action_outPort;
-      if (this_route.size () != 0)
+      for (uint16_t i = 0; i < this_route.size (); i++)
         {
-          if (src_dpId == dpId)
-            {
-              for (uint16_t i = 0; i < this_route.size (); i++)
-                { //got from the src switch
-                  uint32_t outPort;
-                  if (i != this_route.size () - 1)
-                    { //not on dst switch
-                      std::vector<uint64_t>::iterator it =
-                          std::find (m_switch_list.begin (), m_switch_list.end (), this_route[i]);
-                      int src_index = it - m_switch_list.begin ();
-                      it = std::find (m_switch_list.begin (), m_switch_list.end (), this_route[i + 1]);
-                      int dst_index = it - m_switch_list.begin ();
-                      outPort = m_portinfo[src_index][dst_index];
-                      if (i == 0)
-                        { //install output action on src switch
-                          action_outPort = outPort;
-                        }
-                    }
-                  else
-                    {
-                      //datacenter small_3
-                      outPort = ((dst.Get () - dst.CombineMask (mask).Get ()) - 1) % numHosts + 4;
-                      // the internet has different outport
-                      if (dst_dpId == 1)
-                        outPort = 4;
-                      if (i == 0)
-                        action_outPort = outPort;
-                    }
-                  ofl_msg_flow_mod flow_mod_msg;
-                  GenerateFlowModMsg (flow_mod_msg, ethtype, src, dst, outPort, msg->buffer_id);
-
-                  ofl_instruction_actions *ins =
-                      (ofl_instruction_actions *) xmalloc (sizeof (struct ofl_instruction_actions));
-                  ins->header.type = OFPIT_APPLY_ACTIONS;
-                  ins->actions_num = 1;
-
-                  ofl_action_output *a =
-                      (ofl_action_output *) xmalloc (sizeof (struct ofl_action_output));
-                  a->header.type = OFPAT_OUTPUT;
-                  a->port = outPort;
-                  a->max_len = 0;
-
-                  ins->actions = (ofl_action_header **) &a;
-                  flow_mod_msg.instructions = (ofl_instruction_header **) &ins;
-                  Ptr<const RemoteSwitch> dest_switch = GetRemoteSwitch(this_route[i]);
-                  SendToSwitch (dest_switch, (ofl_msg_header *) &flow_mod_msg, xid);
-                  free (a);
-                  free (ins);
-                }
+          uint32_t outPort;
+          if (i != this_route.size () - 1)
+            { //not on dst switch
+              std::vector<uint64_t>::iterator it =
+                  std::find (m_switch_list.begin (), m_switch_list.end (), this_route[i]);
+              int src_index = it - m_switch_list.begin ();
+              it = std::find (m_switch_list.begin (), m_switch_list.end (), this_route[i + 1]);
+              int dst_index = it - m_switch_list.begin ();
+              outPort = m_portinfo[src_index][dst_index];
             }
           else
-            { // got from intermediate switch
-              this_dest_route = m_routes.find (dpId)->second;
-              this_route = this_dest_route.find (dst_dpId)->second;
-
-              for (uint16_t i = 0; i < this_route.size (); i++)
-                {
-                  if (this_route[i] == dpId)
-                    {
-                      uint32_t outPort;
-                      if (i != this_route.size () - 1)
-                        { // not the dst switch
-                          std::vector<uint64_t>::iterator it = std::find (
-                              m_switch_list.begin (), m_switch_list.end (), this_route[i]);
-                          int src_index = it - m_switch_list.begin ();
-                          it = std::find (m_switch_list.begin (), m_switch_list.end (),
-                                          this_route[i + 1]);
-                          int dst_index = it - m_switch_list.begin ();
-                          outPort = m_portinfo[src_index][dst_index];
-                          action_outPort = outPort;
-                        }
-                      else
-                        {
-                          //datacenter small 3agg
-                          outPort = ((dst.Get () - dst.CombineMask (mask).Get ()) - 1) % numHosts + 4;
-                          if (dst_dpId == 1)
-                            outPort = 4;
-                          action_outPort = outPort;
-                        }
-
-                      ofl_msg_flow_mod flow_mod_msg;
-                      GenerateFlowModMsg (flow_mod_msg, ethtype, src, dst, outPort, msg->buffer_id);
-                      ofl_instruction_actions *ins = (ofl_instruction_actions *) xmalloc (
-                          sizeof (struct ofl_instruction_actions));
-                      ins->header.type = OFPIT_APPLY_ACTIONS;
-                      ins->actions_num = 1;
-
-                      ofl_action_output *a =
-                          (ofl_action_output *) xmalloc (sizeof (struct ofl_action_output));
-                      a->header.type = OFPAT_OUTPUT;
-                      a->port = outPort;
-                      a->max_len = 0;
-
-                      ins->actions = (ofl_action_header **) &a;
-
-                      flow_mod_msg.instructions = (ofl_instruction_header **) &ins;
-                      Ptr<const RemoteSwitch> dest_switch = GetRemoteSwitch(this_route[i]);
-                      SendToSwitch (dest_switch, (ofl_msg_header *) &flow_mod_msg, xid);
-                      free (a);
-                      free (ins);
-                    }
-                }
-            }
-          // Lets send the packet out to switch.
-          ofl_msg_packet_out reply;
-          reply.header.type = OFPT_PACKET_OUT;
-          reply.buffer_id = msg->buffer_id;
-          reply.in_port = inPort;
-          reply.data_length = 0;
-          reply.data = 0;
-          ofl_action_output *a = (ofl_action_output *) xmalloc (sizeof (struct ofl_action_output));
-          if (msg->buffer_id == NO_BUFFER)
             {
-              // No packet buffer. Send data back to switch
-              reply.data_length = msg->data_length;
-              reply.data = msg->data;
+              //datacenter small_3
+              outPort = ((dst.Get () - dst.CombineMask (mask).Get ()) - 1) % numHosts + 4;
+              // the internet has different outport
+              if (dst_dpId == 1)
+                outPort = 4;
             }
-          NS_LOG_INFO ("buffer id " << (msg->buffer_id));
-          NS_LOG_INFO ("data lenth " << reply.data_length);
-
-          // Create output action
-          a->header.type = OFPAT_OUTPUT;
-          a->port = action_outPort;
-          a->max_len = 0;
-
-          reply.actions_num = 1;
-          reply.actions = (ofl_action_header **) &a;
-
-          SendToSwitch (swtch, (ofl_msg_header *) &reply, xid);
-          free (a);
+            if (i == 0){
+              action_outPort = outPort;
+            }
+            std::ostringstream cmd;
+            Ptr<const RemoteSwitch> dest_switch = GetRemoteSwitch(this_route[i]);
+            if (ethtype == ArpL3Protocol::PROT_NUMBER) {
+              // this is an arp packet in
+              cmd << "flow-mod cmd=add,table=0,flags=0x0001,prio=1000 "
+                  << "eth_type=0x0806,arp_spa=";
+              src.Print(cmd);
+              cmd << ",arp_tpa=";
+              dst.Print(cmd);
+              cmd << " apply:output=" << outPort;
+              DpctlExecute (dest_switch, cmd.str ());
+            } else {
+              // this is an ipv4 packet in
+              cmd << "flow-mod cmd=add,table=0,flags=0x0001,prio=1000 "
+                  << "eth_type=0x0800,ip_src=";
+              src.Print(cmd);
+              cmd << ",ip_dst=";
+              dst.Print(cmd);
+              cmd << " apply:output=" << outPort;
+              DpctlExecute (dest_switch, cmd.str ());
+            }
         }
+
+      // Create action
+      struct ofl_action_output *action =
+        (struct ofl_action_output*)xmalloc (sizeof (struct ofl_action_output));
+      action->header.type = OFPAT_OUTPUT;
+      action->port = action_outPort;
+      action->max_len = 0;
+
+      // send the packet out to switch.
+      struct ofl_msg_packet_out reply;
+      reply.header.type = OFPT_PACKET_OUT;
+      reply.buffer_id = msg->buffer_id;
+      reply.in_port = inPort;
+      reply.data_length = 0;
+      reply.data = 0;
+      if (msg->buffer_id == NO_BUFFER)
+        {
+          // No packet buffer. Send data back to switch
+          reply.data_length = msg->data_length;
+          reply.data = msg->data;
+        }
+      NS_LOG_INFO ("buffer id " << (msg->buffer_id));
+      NS_LOG_INFO ("data lenth " << reply.data_length);
+
+      reply.actions_num = 1;
+      reply.actions = (ofl_action_header **) &action;
+
+      SendToSwitch (swtch, (ofl_msg_header *) &reply, xid);
+      free (action);
     }
   else
     {

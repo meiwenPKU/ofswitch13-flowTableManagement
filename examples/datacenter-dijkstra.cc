@@ -55,11 +55,11 @@ main (int argc, char *argv[])
 
   if (verbose)
     {
-      ns3::ofs::EnableLibraryLog (true, "datacenter-ofsoftswitch13.log", true, "ANY:ANY:dbg");
+      ns3::ofs::EnableLibraryLog (true, "datacenter-ofsoftswitch13.log", true, "ANY:ANY:warn");
       // LogComponentEnable ("OFSwitch13Port", LOG_LEVEL_INFO);
       // LogComponentEnable ("OFSwitch13Queue", LOG_LEVEL_INFO);
       // LogComponentEnable ("OFSwitch13SocketHandler", LOG_LEVEL_INFO);
-      // LogComponentEnable ("OFSwitch13Controller", LOG_LEVEL_INFO);
+      LogComponentEnable ("OFSwitch13Controller", LOG_LEVEL_ALL);
       // LogComponentEnable ("OFSwitch13LearningController", LOG_LEVEL_INFO);
       LogComponentEnable ("OFSwitch13Helper", LOG_LEVEL_ALL);
       LogComponentEnable ("OFSwitch13Device", LOG_LEVEL_ALL);
