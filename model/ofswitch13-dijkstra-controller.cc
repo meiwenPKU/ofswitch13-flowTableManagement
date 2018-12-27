@@ -164,14 +164,20 @@ OFSwitch13DijkstraController::HandlePacketIn (ofl_msg_packet_in *msg, Ptr<const 
         NS_LOG_ERROR ("No route exists");
         return ofl_error(OFPET_FLOW_MOD_FAILED, OFPFMFC_UNKNOWN);
       }
+      bool is_src_originate = true;
       if (src_dpId != dpId){
         // this switch is not the source, wait for the src switch to install the flow entries
         NS_LOG_INFO ("This switch is not the source of the route");
-        return 0;
+        is_src_originate = false;
+        this_dest_route = m_routes.find (dpId)->second;
+        this_route = this_dest_route.find (dst_dpId)->second;
       }
       uint32_t action_outPort;
       for (uint16_t i = 0; i < this_route.size (); i++)
         {
+          if (!is_src_originate && this_route[i] != dpId){
+            continue;
+          }
           uint32_t outPort;
           if (i != this_route.size () - 1)
             { //not on dst switch
@@ -184,13 +190,12 @@ OFSwitch13DijkstraController::HandlePacketIn (ofl_msg_packet_in *msg, Ptr<const 
             }
           else
             {
-              //datacenter small_3
               outPort = ((dst.Get () - dst.CombineMask (mask).Get ()) - 1) % numHosts + 4;
               // the internet has different outport
               if (dst_dpId == 1)
                 outPort = 4;
             }
-            if (i == 0){
+            if ((is_src_originate && i == 0) || (!is_src_originate && this_route[i] == dpId)){
               action_outPort = outPort;
             }
             std::ostringstream cmd;
