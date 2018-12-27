@@ -94,6 +94,7 @@ def build(bld):
         'model/ofswitch13-device.cc',
         'model/ofswitch13-interface.cc',
         'model/ofswitch13-learning-controller.cc',
+        'model/ofswitch13-dijkstra-controller.cc',
         'model/ofswitch13-port.cc',
         'model/ofswitch13-queue.cc',
         'model/ofswitch13-socket-handler.cc',
@@ -111,6 +112,7 @@ def build(bld):
     headers.module = 'ofswitch13'
     headers.source = [
         'model/ofswitch13-controller.h',
+        'model/ofswitch13-dijkstra-controller.h',
         'model/ofswitch13-device.h',
         'model/ofswitch13-interface.h',
         'model/ofswitch13-learning-controller.h',
@@ -128,4 +130,3 @@ def build(bld):
 
     if bld.env['ENABLE_EXAMPLES']:
         bld.recurse('examples')
-

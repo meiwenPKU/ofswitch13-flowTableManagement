@@ -52,7 +52,7 @@ main (int argc, char *argv[])
 
   if (verbose)
     {
-      OFSwitch13Helper::EnableDatapathLogs ();
+      ns3::ofs::EnableLibraryLog (true, "first-ofsoftswitch13.log", true, "ANY:ANY:dbg");
       LogComponentEnable ("OFSwitch13Interface", LOG_LEVEL_ALL);
       LogComponentEnable ("OFSwitch13Device", LOG_LEVEL_ALL);
       LogComponentEnable ("OFSwitch13Port", LOG_LEVEL_ALL);

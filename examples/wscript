@@ -39,3 +39,6 @@ def build(bld):
 
     obj = bld.create_ns3_program('ofswitch13-linear-externalController-v2', ['ofswitch13', 'internet-apps', 'tap-bridge', 'flow-monitor'])
     obj.source = 'linear-externalController-v2.cc'
+
+    obj = bld.create_ns3_program('ofswitch13-datacenter-dijkstra', ['ofswitch13', 'internet-apps', 'flow-monitor'])
+    obj.source = 'datacenter-dijkstra.cc'

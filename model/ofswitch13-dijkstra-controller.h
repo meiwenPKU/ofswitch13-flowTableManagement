@@ -16,13 +16,14 @@
  * Author: Luciano Chaves <luciano@lrc.ic.unicamp.br>
  */
 
-#ifndef OFSWITCH13_DIJKSTRA_AC__CONTROLLER_H
-#define OFSWITCH13_DIJKSTRA_AC_CONTROLLER_H
+#ifndef OFSWITCH13_DIJKSTRA_CONTROLLER_H
+#define OFSWITCH13_DIJKSTRA_CONTROLLER_H
 
 #include "ofswitch13-interface.h"
 #include "ofswitch13-device.h"
 #include "ofswitch13-controller.h"
 #include <algorithm>
+#include <ns3/ipv4-address.h>
 
 namespace ns3 {
 
@@ -30,11 +31,11 @@ namespace ns3 {
  * \ingroup ofswitch13
  * \brief An Learning OpenFlow 1.3 controller (works as L2 switch)
  */
-class OFSwitch13DijkstraACController : public OFSwitch13Controller
+class OFSwitch13DijkstraController : public OFSwitch13Controller
 {
 public:
-  OFSwitch13DijkstraACController ();          //!< Default constructor
-  virtual ~OFSwitch13DijkstraACController (); //!< Dummy destructor.
+  OFSwitch13DijkstraController (); //!< Default constructor
+  virtual ~OFSwitch13DijkstraController (); //!< Dummy destructor.
 
   /**
    * Register this type.
@@ -54,8 +55,7 @@ public:
    * \param xid Transaction id.
    * \return 0 if everything's ok, otherwise an error number.
    */
-  ofl_err HandlePacketIn (ofl_msg_packet_in *msg, SwitchInfo swtch,
-                          uint32_t xid);
+  ofl_err HandlePacketIn (ofl_msg_packet_in *msg, Ptr<const RemoteSwitch> swtch, uint32_t xid);
 
   /**
    * Handle flow removed messages sent from switch to this controller. Look for
@@ -66,54 +66,31 @@ public:
    * \param xid Transaction id.
    * \return 0 if everything's ok, otherwise an error number.
    */
-  ofl_err HandleFlowRemoved (ofl_msg_flow_removed *msg, SwitchInfo swtch,
-                             uint32_t xid);
+  ofl_err HandleFlowRemoved (ofl_msg_flow_removed *msg, Ptr<const RemoteSwitch> swtch, uint32_t xid);
 
-  /**
-   * Handle multipart reply messages sent from switch to this controller. .
-   *
-   * \param msg The multipart reply message.
-   * \param swtch The switch information.
-   * \param xid Transaction id.
-   * \return 0 if everything's ok, otherwise an error number.
-   */
-  ofl_err HandleMultipartReply (ofl_msg_multipart_reply_header *msg, SwitchInfo swtch,
-                        uint32_t xid);
-
-  void FlowStatsRequest (SwitchInfo swtch);
-  void TableStatsRequest (SwitchInfo swtch);
-  void HandleFlowStats (ofl_msg_multipart_reply_header *msg, SwitchInfo swtch,
-                        uint32_t xid);
-  void HandleTableStats (ofl_msg_multipart_reply_header *msg, SwitchInfo swtch,
-                        uint32_t xid);
   void ReadFromFile (std::string fileName);
-  void GenerateFlowModMsg (ofl_msg_flow_mod &flow_mod_msg, uint16_t ethtype, Ipv4Address &src, IPv4Address &dst, uint32_t outPort, uint32_t buffer_id);
-  void SetACRate (double rate);
-  void SetRequestRate (double rate);
+  void GenerateFlowModMsg (ofl_msg_flow_mod &flow_mod_msg, uint16_t ethtype, Ipv4Address &src, Ipv4Address &dst, uint32_t outPort, uint32_t buffer_id);
   typedef std::vector<uint64_t> route;
-  int minDistance(int dist[], bool sptSet[]);
-  route ComputeRoute(uint64_t src, uint64_t dst, bool reserved);
-  Ipv4Address ExtractIpv4Address (uint32_t oxm_of, struct ofl_match* match);
+  int minDistance (int dist[], bool sptSet[]);
+  route ComputeRoute (uint64_t src, uint64_t dst, bool reserved);
+  Ipv4Address ExtractIpv4Address (uint32_t oxm_of, struct ofl_match *match);
+
 protected:
   // Inherited from OFSwitch13Controller
-  void ConnectionStarted (SwitchInfo swtch);
+  void HandshakeSuccessful (Ptr<const RemoteSwitch> swtch);
 
 private:
-  int V;
-  double m_ACRate;
-  double m_RequestRate;
-  std::vector<std::vector<int> >m_nettopo;
-  std::vector<std::vector<int> >m_nettopo_reserved;
-  std::vector<std::vector<int> >m_portinfo;
+  int V;   // number of switches in the data center topology
+  int numHosts; // number of hosts connected to each edge switch in the data center
+  std::vector<std::vector<int>> m_nettopo;
+  std::vector<std::vector<int>> m_nettopo_reserved;
+  std::vector<std::vector<int>> m_portinfo;
   std::vector<uint64_t> m_switch_list;
   typedef std::map<uint64_t, route> dest_route;
   typedef std::map<uint64_t, dest_route> source_dest_route;
   source_dest_route m_routes;
-  std::map<Ipv4Address, uint64_t> m_host_info;
   std::vector<uint64_t> full_switch;
   typedef std::pair<Ipv4Address, Ipv4Address> address_tuple;
-  std::map<address_tuple, int> arp_reject_map;
-  std::map<address_tuple, int> tcp_reject_map;
 };
 
 } // namespace ns3
