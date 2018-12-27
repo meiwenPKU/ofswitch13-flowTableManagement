@@ -261,7 +261,7 @@ void update_num_cap_miss(struct flow_table *table, struct flow_entry *entry){
     // the flow entry was installed before
     table->numCapMiss ++;
     //printf("numCapMiss=%d\n", table->numCapMiss);
-    VLOG_WARN(LOG_MODULE, "numCapMiss=%d", table->numCapMiss);
+    VLOG_WARN(LOG_MODULE, "dpId=%d, tableId=%d, numCapMiss=%d", (uint32_t)(table->dp->id), table->stats->table_id, table->numCapMiss);
   } else {
     // insert the hash value to the hmap
     hmap_insert(&table->all_installed_entries, node, hash_value);
