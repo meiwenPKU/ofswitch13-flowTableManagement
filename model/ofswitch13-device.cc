@@ -26,7 +26,9 @@
     }
 
 #include <ns3/object-vector.h>
+#include <ns3/ipv4-header.h>
 #include "ofswitch13-device.h"
+
 
 namespace ns3 {
 
@@ -217,6 +219,18 @@ OFSwitch13Device::GetFlowEntries (size_t tableId) const
   return entries;
 }
 
+void
+OFSwitch13Device::SetMLEvictionPolicy(double prob) const
+{
+  NS_ASSERT_MSG (m_datapath, "No datapath defined yet.");
+  for (size_t i = 0; i < GetNPipelineTables (); i++)
+    {
+      struct flow_table *table = m_datapath->pipeline->tables [i];
+      table->use_lru = false;
+      table->prob_ml = prob;
+    }
+}
+
 uint64_t
 OFSwitch13Device::GetFlowModCounter (void) const
 {
@@ -339,6 +353,15 @@ OFSwitch13Device::ReceiveFromSwitchPort (Ptr<Packet> packet, uint32_t portNo,
 {
   NS_LOG_FUNCTION (this << packet << portNo << tunnelId);
 
+  // debug
+  Ptr<Packet> copy = packet->Copy ();
+  Ipv4Header iph;
+  copy->RemoveHeader (iph);
+  Ipv4Address src = iph.GetSource();
+  Ipv4Address dst = iph.GetDestination();
+  if (src == Ipv4Address("10.1.1.1") && dst == Ipv4Address("10.1.1.6")){
+    NS_LOG_INFO ("debug here");
+  }
   // Check the packet for conformance to the pipeline capacity.
   uint32_t pktSizeBits = packet->GetSize () * 8;
   if (m_pipeTokens < pktSizeBits)

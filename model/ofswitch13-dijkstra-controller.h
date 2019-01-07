@@ -91,6 +91,8 @@ private:
   source_dest_route m_routes;
   std::vector<uint64_t> full_switch;
   typedef std::pair<Ipv4Address, Ipv4Address> address_tuple;
+  std::map<uint64_t, std::map<std::string, uint32_t>> pkt_in_cnt;
+  std::map<uint64_t, uint32_t> pkt_in_cnt_per_dp;
 };
 
 } // namespace ns3

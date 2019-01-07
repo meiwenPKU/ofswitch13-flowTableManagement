@@ -79,6 +79,13 @@ OFSwitch13DeviceContainer::Add (OFSwitch13DeviceContainer other)
     }
 }
 
+void OFSwitch13DeviceContainer::SetMLEvictionPolicy(double prob){
+  for (Iterator i = m_devices.begin (); i != m_devices.end (); i++)
+    {
+      (*i)->SetMLEvictionPolicy(prob);
+    }
+}
+
 void
 OFSwitch13DeviceContainer::Add (Ptr<OFSwitch13Device> device)
 {

@@ -75,9 +75,18 @@ OFSwitch13InternalHelper::CreateOpenFlowChannels (void)
           CreateObjectWithAttributes<CsmaChannel> (
             "DataRate", DataRateValue (m_channelDataRate));
 
+
         // Connecting all switches and controllers to the common channel.
         NetDeviceContainer switchDevices;
         Ipv4InterfaceContainer controllerAddrs;
+
+        m_csmaHelper.SetDeviceAttribute ("Mtu", UintegerValue (9000));
+        // set the control channel propagation delay as 1 ms
+        m_csmaHelper.SetChannelAttribute ("Delay", TimeValue(Seconds(0.001)));
+        // Using large queues on devices to avoid losing packets.
+        m_csmaHelper.SetQueue ("ns3::DropTailQueue<Packet>",
+                               "MaxSize", StringValue ("100p"));
+                               
         m_controlDevs = m_csmaHelper.Install (m_controlNodes, csmaChannel);
         switchDevices = m_csmaHelper.Install (m_switchNodes,  csmaChannel);
         controllerAddrs = m_ipv4helper.Assign (m_controlDevs);
@@ -121,11 +130,16 @@ OFSwitch13InternalHelper::CreateOpenFlowChannels (void)
         m_csmaHelper.SetDeviceAttribute ("Mtu", UintegerValue (9000));
         m_p2pHelper.SetDeviceAttribute ("Mtu", UintegerValue (9000));
 
+        // set the control channel propagation delay as 1 ms
+        m_csmaHelper.SetChannelAttribute ("Delay", TimeValue(Seconds(0.001)));
+        m_p2pHelper.SetChannelAttribute ("Delay", TimeValue(Seconds(0.001)));
+
         // Using large queues on devices to avoid losing packets.
         m_csmaHelper.SetQueue ("ns3::DropTailQueue<Packet>",
-                               "MaxSize", StringValue ("65536p"));
+                               "MaxSize", StringValue ("100p"));
         m_p2pHelper.SetQueue ("ns3::DropTailQueue<Packet>",
-                              "MaxSize", StringValue ("65536p"));
+                              "MaxSize", StringValue ("100p"));
+
 
         // Create individual channels for each pair switch/controller.
         UintegerValue portValue;

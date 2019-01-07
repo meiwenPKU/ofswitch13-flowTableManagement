@@ -42,3 +42,6 @@ def build(bld):
 
     obj = bld.create_ns3_program('ofswitch13-datacenter-dijkstra', ['ofswitch13', 'internet-apps', 'flow-monitor'])
     obj.source = 'datacenter-dijkstra.cc'
+
+    obj = bld.create_ns3_program('ofswitch13-datacenter-test', ['ofswitch13', 'internet-apps'])
+    obj.source = 'datacenter-test.cc'

@@ -199,6 +199,8 @@ public:
    */
   void Add (std::string deviceName);
 
+  void SetMLEvictionPolicy(double prob);
+
 private:
   std::vector<Ptr<OFSwitch13Device> > m_devices; //!< OFSwitch13Device pointers
 };

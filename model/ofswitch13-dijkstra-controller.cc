@@ -121,6 +121,12 @@ OFSwitch13DijkstraController::HandlePacketIn (ofl_msg_packet_in *msg, Ptr<const 
 
   char *m = ofl_structs_match_to_string ((struct ofl_match_header *) msg->match, 0);
   NS_LOG_DEBUG ("Packet in match: " << m);
+  std::string key(m);
+  pkt_in_cnt[dpId][key] += 1;
+  if (pkt_in_cnt[dpId][key] > 1) {
+    pkt_in_cnt_per_dp[dpId] += 1;
+    NS_LOG_WARN ("Controller counts cap miss: dpId=" << dpId << ", numCapMiss=" << pkt_in_cnt_per_dp[dpId]);
+  }
   free (m);
 
   if (reason == OFPR_NO_MATCH)

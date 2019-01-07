@@ -175,6 +175,7 @@ public:
   Time     GetPipelineDelay     (void) const;
   DataRate GetPipelineLoad      (void) const;
   uint32_t GetSumFlowEntries    (void) const;
+  void     SetMLEvictionPolicy  (double prob) const;
   //\}
 
   /**

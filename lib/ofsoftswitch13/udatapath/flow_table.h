@@ -59,10 +59,13 @@ struct flow_table {
                                                 idle timeout. */
     /*map of all installed flow entries, where a flow entry is defined by its match fields. This is used to cacluate the capacity misses of flow table*/
     struct hmap               all_installed_entries;
+    uint32_t                  numInstall;      /*number of flow entry install*/
     uint32_t                  numCapMiss;      /*number of capacity misses */
     /*store the start and end time for each flows, such that we can simulate the behavior of ML approach*/
     struct hmap               flow_stats;
     bool                      initiated;
+    double                    prob_ml; // the probability of evicting an inactive flow entry for ml eviction to simulate the ml policy
+    bool                      use_lru; // use the lru policy, otherwise using ml policy
 };
 
 extern uint32_t oxm_ids[];

@@ -34,14 +34,15 @@ main (int argc, char *argv[])
   typedef std::vector<CsmaHelper> vector_of_CsmaHelper;
   typedef std::vector<vector_of_CsmaHelper> vector_of_vector_of_CsmaHelper;
 
-  double tcpProb = 0.67;
+  double tcpProb = 1;
   double startTime = MIN_START;
   double endTime = MIN_START;
   double simTime = 0;
+  double prob = 0.5;
   int num_controller = 1; // number of controllers
   int num_agg_switch = 3; // number of agg switch nodes
   int num_edge_switch = 16; // number of edge switch nodes
-  int num_host = 1; // number of hosts connected with one edge switch
+  int num_host = 5; // number of hosts connected with one edge switch
 
   bool verbose = true; // log information level indication in ryu application
 
@@ -51,27 +52,34 @@ main (int argc, char *argv[])
   cmd.AddValue ("num_switch", "Number of agg switch", num_agg_switch);
   cmd.AddValue ("num_edge_switch", "Number of edge switches", num_edge_switch);
   cmd.AddValue ("num_host", "number of hosts connected with one edge switch ", num_host);
+  cmd.AddValue ("prob", "probability of evicting an inactive flow entry", prob);
   cmd.Parse (argc, argv);
+
+  std::string ofsoftswitch_file;
+  ofsoftswitch_file = "datacenter-ofsoftswitch13-5hosts-v3-" + std::to_string(prob) + ".log";
 
   if (verbose)
     {
-      ns3::ofs::EnableLibraryLog (true, "datacenter-ofsoftswitch13.log", true, "ANY:ANY:warn");
+      ns3::ofs::EnableLibraryLog (true, ofsoftswitch_file, true, "ANY:ANY:warn");
       // LogComponentEnable ("OFSwitch13Port", LOG_LEVEL_INFO);
       // LogComponentEnable ("OFSwitch13Queue", LOG_LEVEL_INFO);
       // LogComponentEnable ("OFSwitch13SocketHandler", LOG_LEVEL_INFO);
-      LogComponentEnable ("OFSwitch13Controller", LOG_LEVEL_ALL);
+      // LogComponentEnable ("OFSwitch13Controller", LOG_LEVEL_ALL);
       // LogComponentEnable ("OFSwitch13LearningController", LOG_LEVEL_INFO);
-      LogComponentEnable ("OFSwitch13Helper", LOG_LEVEL_ALL);
-      LogComponentEnable ("OFSwitch13Device", LOG_LEVEL_ALL);
+      // LogComponentEnable ("OFSwitch13Helper", LOG_LEVEL_ALL);
+      // LogComponentEnable ("OFSwitch13Device", LOG_LEVEL_INFO);
       // LogComponentEnable ("OFSwitch13Interface", LOG_LEVEL_INFO);
       LogComponentEnable ("Datacenter_SDN", LOG_LEVEL_INFO);
-      LogComponentEnable ("OnOffApplication", LOG_LEVEL_INFO);
+      //LogComponentEnable ("OnOffApplication", LOG_LEVEL_INFO);
       LogComponentEnable ("PacketSink", LOG_LEVEL_INFO);
-      LogComponentEnable ("OFSwitch13ExternalHelper", LOG_LEVEL_ALL);
-      LogComponentEnable ("FlowMonitor", LOG_LEVEL_WARN);
+      //LogComponentEnable ("OFSwitch13ExternalHelper", LOG_LEVEL_ALL);
+      //LogComponentEnable ("FlowMonitor", LOG_LEVEL_ALL);
       LogComponentEnable ("OFSwitch13DijkstraController", LOG_LEVEL_ALL);
+      // LogComponentEnable ("TcpSocketBase", LOG_LEVEL_ALL);
+      // LogComponentEnable ("DropTailQueue", LOG_LEVEL_ALL);
     }
 
+  Config::SetDefault("ns3::QueueBase::MaxSize", QueueSizeValue (QueueSize ("4294967295p")));
   // ---------------------define nodes-----------------------
   NodeContainer agg_switch_nodes, edge_switch_nodes, controller_node, cloud_switch_node, internet;
   vector_of_NodeContainer host_nodes (num_edge_switch);
@@ -100,9 +108,13 @@ main (int argc, char *argv[])
 
   link_cloud_to_internet.SetChannelAttribute ("DataRate", StringValue ("10Gbps"));
   link_cloud_to_internet.SetChannelAttribute ("Delay", StringValue ("1ms"));
+  link_cloud_to_internet.SetQueue("ns3::DropTailQueue<Packet>");
 
   // ---------------------define OF13Helper
   Ptr<OFSwitch13InternalHelper> of13helper = CreateObject<OFSwitch13InternalHelper> ();
+
+  Config::SetDefault ("ns3::TcpSocket::SndBufSize", UintegerValue (4294967295));
+  Config::SetDefault ("ns3::TcpSocket::RcvBufSize", UintegerValue (1<<30));
 
   // ----------------create nodes--------------------
   NS_LOG_INFO ("create controller nodes");
@@ -134,6 +146,7 @@ main (int argc, char *argv[])
       NodeContainer nc (agg_switch_nodes.Get (i), cloud_switch_node.Get (0));
       link_Switch_to_cloud[i].SetChannelAttribute ("DataRate", StringValue ("10Gbps"));
       link_Switch_to_cloud[i].SetChannelAttribute ("Delay", StringValue ("1ms"));
+      link_Switch_to_cloud[i].SetQueue("ns3::DropTailQueue<Packet>");
       NetDeviceContainer link = link_Switch_to_cloud[i].Install (nc);
       agg_switch_ports[i].Add (link.Get (0));
       cloud_switch_ports.Add (link.Get (1));
@@ -148,6 +161,7 @@ main (int argc, char *argv[])
           link_edgeSwitch_2_aggSwitch[i][j].SetChannelAttribute ("DataRate",
                                                                  StringValue ("10Gbps"));
           link_edgeSwitch_2_aggSwitch[i][j].SetChannelAttribute ("Delay", StringValue ("1ms"));
+          link_edgeSwitch_2_aggSwitch[i][j].SetQueue("ns3::DropTailQueue<Packet>");
           edgeSwitch_2_aggSwitch_net_device[i][j] = link_edgeSwitch_2_aggSwitch[i][j].Install (nc);
           edge_switch_ports[j].Add (edgeSwitch_2_aggSwitch_net_device[i][j].Get (0));
           agg_switch_ports[i].Add (edgeSwitch_2_aggSwitch_net_device[i][j].Get (1));
@@ -163,6 +177,7 @@ main (int argc, char *argv[])
           NodeContainer nc (host_nodes[i].Get (j), edge_switch_nodes.Get (i));
           link_host_2_edgeSwitch[i][j].SetChannelAttribute ("DataRate", StringValue ("100Mbps"));
           link_host_2_edgeSwitch[i][j].SetChannelAttribute ("Delay", StringValue ("1ms"));
+          link_host_2_edgeSwitch[i][j].SetQueue("ns3::DropTailQueue<Packet>");
           host_2_edgeSwitch_net_device[i][j] = link_host_2_edgeSwitch[i][j].Install (nc);
           edge_switch_ports[i].Add (host_2_edgeSwitch_net_device[i][j].Get (1));
           hostDevices[i].Add (host_2_edgeSwitch_net_device[i][j].Get (0));
@@ -177,29 +192,31 @@ main (int argc, char *argv[])
   internet_device.Add (cloud_internet_device.Get (0));
 
   //----------install the controller app------------
-  //of13helper->SetAttribute ("ChannelType", EnumValue (OFSwitch13Helper::DEDICATEDP2P));
+  //of13helper->SetChannelType (OFSwitch13Helper::DEDICATEDP2P);
   of13helper->SetChannelDataRate (DataRate ("17Mbps"));
   Ptr<OFSwitch13DijkstraController> dijkstraCtrl = CreateObject<OFSwitch13DijkstraController> ();
   of13helper->InstallController (controller_node.Get (0), dijkstraCtrl);
 
+  OFSwitch13DeviceContainer ofswitch13_device_container;
   //------connect cloud switch to controller--------
   NS_LOG_INFO ("connect the cloud switch nodes to controller");
-  of13helper->InstallSwitch (cloud_switch_node.Get (0), cloud_switch_ports);
+  ofswitch13_device_container.Add(of13helper->InstallSwitch (cloud_switch_node.Get (0), cloud_switch_ports));
 
   //------connect agg switch to controller--------
   NS_LOG_INFO ("connect the agg switch nodes to controller");
   for (int i = 0; i < num_agg_switch; i++)
     {
-      of13helper->InstallSwitch (agg_switch_nodes.Get (i), agg_switch_ports[i]);
+      ofswitch13_device_container.Add(of13helper->InstallSwitch (agg_switch_nodes.Get (i), agg_switch_ports[i]));
     }
 
   //------connect the edge switch nodes to controller------
   NS_LOG_INFO ("connect the edge switch nodes to controller");
   for (int i = 0; i < num_edge_switch; i++)
     {
-      of13helper->InstallSwitch (edge_switch_nodes.Get (i), edge_switch_ports[i]);
+      ofswitch13_device_container.Add(of13helper->InstallSwitch (edge_switch_nodes.Get (i), edge_switch_ports[i]));
     }
   of13helper->CreateOpenFlowChannels();
+  ofswitch13_device_container.SetMLEvictionPolicy(prob);
 
   // install stack in the host nodes
   NS_LOG_INFO ("install stack in the host nodes");
@@ -290,7 +307,7 @@ main (int argc, char *argv[])
                   AddressValue remote_address (InetSocketAddress (
                       host_2_edgeSwitch_ipv4_interface[i_remote][j_remote].GetAddress (0), 9999));
                   on_off_helper.SetAttribute ("Remote", remote_address);
-                  on_off_helper.SetAttribute ("DataRate", DataRateValue (DataRate ("0.4MB/s")));
+                  on_off_helper.SetAttribute ("DataRate", DataRateValue (DataRate ("0.842MB/s")));
                   on_off_helper.SetAttribute ("OnTime", ns3::PointerValue (onTimeVal));
                   on_off_helper.SetAttribute ("OffTime", ns3::PointerValue (offTimeVal));
                   if (random_num_generator->GetValue () > tcpProb)
@@ -325,7 +342,7 @@ main (int argc, char *argv[])
           AddressValue remote_address (InetSocketAddress (
               host_2_edgeSwitch_ipv4_interface[num_edge_switch][0].GetAddress (0), 9999));
           on_off_helper.SetAttribute ("Remote", remote_address);
-          on_off_helper.SetAttribute ("DataRate", DataRateValue (DataRate ("0.4MB/s")));
+          on_off_helper.SetAttribute ("DataRate", DataRateValue (DataRate ("0.842MB/s")));
           on_off_helper.SetAttribute ("OnTime", ns3::PointerValue (onTimeVal));
           on_off_helper.SetAttribute ("OffTime", ns3::PointerValue (offTimeVal));
           if (random_num_generator->GetValue () > tcpProb)
@@ -345,7 +362,7 @@ main (int argc, char *argv[])
               simTime = endTime;
             }
           ApplicationContainer on_off_app;
-          on_off_app = on_off_helper.Install (internet);
+          on_off_app = on_off_helper.Install (host_nodes[i].Get (j));
           on_off_app.Start (Seconds (startTime));
           on_off_app.Stop (Seconds (endTime));
           host_2_edgeSwitch_ipv4_interface[i][j].GetAddress (0).Print (outputFile);
@@ -367,12 +384,15 @@ main (int argc, char *argv[])
   all_hosts.Add (internet);
   Ptr<FlowMonitor> flowMonitor;
   FlowMonitorHelper flowHelper;
+  flowHelper.SetMonitorAttribute ("MaxPerHopDelay", TimeValue(Seconds(50)));
   flowMonitor = flowHelper.Install (all_hosts);
 
   // Run the simulation
-  Simulator::Stop (Seconds (simTime + 10));
+  Simulator::Stop (Seconds (simTime + 60));
   Simulator::Run ();
-  flowMonitor->SerializeToXmlFile ("simulationResults/flowTransStats-datacenter.xml", false, false);
+  std::string xml_file;
+  xml_file = "simulationResults/flowTransStats-datacenter-5hosts-v3-" + std::to_string(prob) + ".xml";
+  flowMonitor->SerializeToXmlFile (xml_file, false, false);
   Simulator::Destroy ();
   return 0;
 }

@@ -127,13 +127,13 @@ char* get_ipv4_key (struct ofl_match *omt){
       }
       field = OXM_FIELD(f->header);
       switch (field) {
-        case OFPXMT_OFB_IPV4_DST:
+        case OFPXMT_OFB_IPV4_SRC:
           ip = (uint32_t *) (f->value);
           for (int i = 0; i < 4; i++){
             src_octet[i] = ((*ip) >> (i*8)) & 0xff;
           }
     			break;
-    		case OFPXMT_OFB_IPV4_SRC:
+    		case OFPXMT_OFB_IPV4_DST:
           ip = (uint32_t *) (f->value);
           for (int i = 0; i < 4; i++){
             dst_octet[i] = ((*ip) >> (i*8)) & 0xff;
@@ -144,7 +144,7 @@ char* get_ipv4_key (struct ofl_match *omt){
       }
     }
   }
-  fprintf(stream, "%d.%d.%d.%d-%d.%d.%d.%d", src_octet[3], src_octet[2], src_octet[1], src_octet[0], dst_octet[3], dst_octet[2], dst_octet[1], dst_octet[0]);
+  fprintf(stream, "%d.%d.%d.%d-%d.%d.%d.%d", src_octet[0], src_octet[1], src_octet[2], src_octet[3], dst_octet[0], dst_octet[1], dst_octet[2], dst_octet[3]);
   fclose(stream);
   return key;
 }
@@ -155,15 +155,16 @@ void ml_evict(struct flow_table *table, double time_stamp) {
   struct flow_entry *active_entry = NULL;
   struct flow_entry *inactive_entry = NULL;
   struct flow_entry *evict_entry = NULL;
-  int active_count = 0;
   int inactive_count = 0;
-  double prob = 0.7;
+  //int active_count = 0;
+  uint64_t lru_value = 0xffffffffffffffffUL;
   char* msg = NULL;
   FILE* stream;
   char *src, *dst, *end, *key;
   struct hmap_node* node;
   size_t hash_value;
   char line[1024];
+  bool evict_active = false;
 
   /* Init flow stats */
   if (!table->initiated)
@@ -189,38 +190,65 @@ void ml_evict(struct flow_table *table, double time_stamp) {
     }
 
   LIST_FOR_EACH (entry, struct flow_entry, match_node, &table->match_entries){
-    // loop through each entry
+    // avoid to evict the all_match flow entry
+    struct ofl_match* omt = (struct ofl_match *)(entry->stats->match);
+    char* entry_key;
+    if (omt->header.length <= 4){
+      continue;
+    }
     // get the src ip and dst ip of the entry
-    char* key = get_ipv4_key((struct ofl_match *)(entry->stats->match));
-    size_t hash_value = hash_string(key, 0);
-    struct hmap_node* node = hmap_first_with_hash(&(table->flow_stats), hash_value);
-    if (node != NULL && node->value < time_stamp + 2){
-      // this flow is inactive now
-      active_count ++;
-      if (rand() % active_count < 1){
-        active_entry = entry;
-      }
-    } else {
-      // this flow is active flow
+    entry_key = get_ipv4_key(omt);
+    hash_value = hash_string(entry_key, 0);
+    free(entry_key);
+    node = hmap_first_with_hash(&(table->flow_stats), hash_value);
+    // msg = ofl_structs_oxm_match_to_string((struct ofl_match *)(entry->stats->match));
+    // VLOG_DBG(LOG_MODULE, "%s", msg);
+
+    if (node != NULL && node->value < time_stamp + 1){
+      // this flow is inactive flow
       inactive_count ++;
       if (rand() % inactive_count < 1){
         inactive_entry = entry;
       }
+    } else {
+      // this flow is active flow or unrecognized flow
+
+      if (active_entry == NULL){
+        active_entry = entry;
+        lru_value = entry->last_used;
+      } else if (entry->last_used < lru_value){
+        lru_value = entry->last_used;
+        active_entry = entry;
+      }
+      //
+      // if (node == NULL){
+      //   active_entry = entry;
+      // } else if (node->value < active_end){
+      //   active_entry = entry;
+      //   active_end = node->value;
+      // }
+      // active_count ++;
+      // if (rand() % active_count < 1){
+      //    active_entry = entry;
+      // }
     }
   }
   if (active_entry == NULL){
     evict_entry = inactive_entry;
   } else if (inactive_entry == NULL){
     evict_entry = active_entry;
-  } else if (rand() % 1000 < prob*1000){
+    evict_active = true;
+  } else if (rand() % 1000 < table->prob_ml*1000){
     evict_entry = inactive_entry;
   } else {
     evict_entry = active_entry;
+    evict_active = true;
   }
   //VLOG_DBG(LOG_MODULE, "Evict the flow entry:");
   msg = ofl_structs_oxm_match_to_string((struct ofl_match *)(evict_entry->stats->match));
   //printf ("t=%f, evict the flow entry: %s\n", time_stamp, msg);
-  VLOG_WARN(LOG_MODULE, "t=%f, evict the flow entry: %s", time_stamp, msg);
+  VLOG_WARN(LOG_MODULE, "dpId=%d, tableId=%d, t=%f, evict the %d flow entry: %s", (uint32_t)(table->dp->id), table->stats->table_id, time_stamp, evict_active, msg);
+  free(msg);
   // evict the lru entry
   flow_entry_remove(evict_entry, OFPRR_EVICTION);
 }
@@ -245,7 +273,7 @@ void lru_evict(struct flow_table *table, double time_stamp) {
     //VLOG_DBG(LOG_MODULE, "Evict the flow entry:");
     msg = ofl_structs_oxm_match_to_string((struct ofl_match *)(lru_entry->stats->match));
     //printf ("t=%f, evict the flow entry: %s\n", time_stamp, msg);
-    VLOG_WARN(LOG_MODULE, "t=%f, evict the flow entry: %s", time_stamp, msg);
+    VLOG_WARN(LOG_MODULE, "dpId=%d, tableId=%d, t=%f, evict the flow entry: %s", (uint32_t)(table->dp->id), table->stats->table_id, time_stamp, msg);
     // evict the lru entry
     flow_entry_remove(lru_entry, OFPRR_EVICTION);
 }
@@ -256,12 +284,14 @@ void update_num_cap_miss(struct flow_table *table, struct flow_entry *entry){
   size_t hash_value;
   node = malloc(sizeof(struct hmap_node));
   entry_match_string = ofl_structs_oxm_match_to_string((struct ofl_match*)(entry->stats->match));
+  VLOG_DBG(LOG_MODULE, "dpId=%d, tableId=%d, install flow entry: %s", (uint32_t)(table->dp->id), table->stats->table_id, entry_match_string);
+  table->numInstall++;
   hash_value = hash_string(entry_match_string, 0);
   if (hmap_first_with_hash(&table->all_installed_entries, hash_value) != NULL){
     // the flow entry was installed before
     table->numCapMiss ++;
     //printf("numCapMiss=%d\n", table->numCapMiss);
-    VLOG_WARN(LOG_MODULE, "dpId=%d, tableId=%d, numCapMiss=%d", (uint32_t)(table->dp->id), table->stats->table_id, table->numCapMiss);
+    VLOG_WARN(LOG_MODULE, "dpId=%d, tableId=%d, numCapMiss=%d, numInstall=%d", (uint32_t)(table->dp->id), table->stats->table_id, table->numCapMiss, table->numInstall);
   } else {
     // insert the hash value to the hmap
     hmap_insert(&table->all_installed_entries, node, hash_value);
@@ -324,10 +354,11 @@ flow_table_add_with_timestamp(struct flow_table *table, struct ofl_msg_flow_mod 
 
     if (table->stats->active_count == table->features->max_entries) {
         // implement flow entry eviction here, implement lru and ml policy
-        // LRU eviction policy
-        //lru_evict(table, time_stamp);
-        ml_evict (table, time_stamp);
-        //return ofl_error(OFPET_FLOW_MOD_FAILED, OFPFMFC_TABLE_FULL);
+        if (table->use_lru) {
+          lru_evict(table, time_stamp);
+        } else {
+          ml_evict (table, time_stamp);
+        }
     }
 
     LIST_FOR_EACH (entry, struct flow_entry, match_node, &table->match_entries) {
@@ -347,7 +378,7 @@ flow_table_add_with_timestamp(struct flow_table *table, struct ofl_msg_flow_mod 
             list_remove(&entry->idle_node);
             flow_entry_destroy(entry);
             add_to_timeout_lists(table, new_entry);
-            update_num_cap_miss(table, new_entry);
+            //update_num_cap_miss(table, new_entry);
             return 0;
         }
 
@@ -641,6 +672,9 @@ flow_table_create(struct pipeline *pl, uint8_t table_id) {
     table->stats->matched_count = 0;
 
     table->initiated = false;
+    table->use_lru = true;
+    table->prob_ml = 0.5;
+    table->numInstall = 0;
 
     /* Init Table features */
     table->features = xmalloc(sizeof(struct ofl_table_features));
