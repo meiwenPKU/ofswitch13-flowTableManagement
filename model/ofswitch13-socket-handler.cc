@@ -19,6 +19,7 @@
  */
 
 #include "ofswitch13-socket-handler.h"
+#include "ns3/uinteger.h"
 
 namespace ns3 {
 
@@ -31,6 +32,11 @@ OFSwitch13SocketHandler::GetTypeId (void)
   static TypeId tid = TypeId ("ns3::OFSwitch13SocketHandler")
     .SetParent<Object> ()
     .SetGroupName ("OFSwitch13")
+    .AddAttribute ("PktProcDelay",
+                   "The delay (ns) for processing a msg from the switch",
+                   UintegerValue (0),
+                   MakeUintegerAccessor (&OFSwitch13SocketHandler::m_pktProcDelay),
+                   MakeUintegerChecker<uint32_t> ())
   ;
   return tid;
 }
@@ -39,7 +45,9 @@ OFSwitch13SocketHandler::OFSwitch13SocketHandler (Ptr<Socket> socket)
   : m_socket (socket),
   m_pendingPacket (0),
   m_pendingBytes (0),
-  m_txQueue ()
+  m_txQueue (),
+  m_pktProcDelay (0),
+  m_lastRecTime (0)
 {
   NS_LOG_FUNCTION (this << socket);
 
@@ -111,7 +119,7 @@ OFSwitch13SocketHandler::Send (Ptr<Socket> socket, uint32_t available)
 }
 
 void
-OFSwitch13SocketHandler::Recv (Ptr<Socket> socket)
+OFSwitch13SocketHandler::RecvHandler (Ptr<Socket> socket)
 {
   NS_LOG_FUNCTION (this << socket);
 
@@ -159,6 +167,19 @@ OFSwitch13SocketHandler::Recv (Ptr<Socket> socket)
           m_pendingPacket = 0;
         }
     }
+}
+
+void
+OFSwitch13SocketHandler::Recv (Ptr<Socket> socket)
+{
+  NS_LOG_FUNCTION (this << socket);
+  if (m_lastRecTime == 0 || m_lastRecTime + m_pktProcDelay <= Simulator::Now().GetNanoSeconds()){
+    RecvHandler(socket);
+    m_lastRecTime = Simulator::Now().GetNanoSeconds();
+    return;
+  }
+  m_lastRecTime += m_pktProcDelay;
+  Simulator::Schedule (NanoSeconds(m_lastRecTime), &OFSwitch13SocketHandler::RecvHandler, this, socket);
 }
 
 } // namespace ns3

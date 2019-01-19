@@ -85,8 +85,8 @@ OFSwitch13InternalHelper::CreateOpenFlowChannels (void)
         m_csmaHelper.SetChannelAttribute ("Delay", TimeValue(Seconds(0.001)));
         // Using large queues on devices to avoid losing packets.
         m_csmaHelper.SetQueue ("ns3::DropTailQueue<Packet>",
-                               "MaxSize", StringValue ("100p"));
-                               
+                               "MaxSize", StringValue ("400p"));
+
         m_controlDevs = m_csmaHelper.Install (m_controlNodes, csmaChannel);
         switchDevices = m_csmaHelper.Install (m_switchNodes,  csmaChannel);
         controllerAddrs = m_ipv4helper.Assign (m_controlDevs);

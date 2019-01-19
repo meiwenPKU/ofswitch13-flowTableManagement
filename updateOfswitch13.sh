@@ -5,6 +5,6 @@ make
 
 cd ../../../../
 sudo rm -r build/
-sudo ./waf configure --enable-examples
-#sudo ./waf configure
+#sudo ./waf configure --enable-examples
+sudo ./waf configure
 sudo ./waf

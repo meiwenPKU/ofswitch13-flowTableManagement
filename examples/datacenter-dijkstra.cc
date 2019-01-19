@@ -19,6 +19,27 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("Datacenter_SDN");
 #define MIN_START 50
+// int numPkts = 0;
+//
+// static void EnQueueTracer(Ptr<const Packet> nxt){
+//   numPkts ++;
+//   NS_LOG_INFO ("At time " << Simulator::Now ().GetSeconds () << "s, trace Enqueue " << nxt << ", numPkts = " << numPkts);
+// }
+//
+// static void DequeueTracer(Ptr<const Packet> nxt){
+//   numPkts --;
+//   NS_LOG_INFO ("At time " << Simulator::Now ().GetSeconds () << "s, trace Dequeue " << nxt << ", numPkts = " << numPkts);
+// }
+//
+// static void DropTracer(Ptr<const Packet> nxt){
+//   numPkts --;
+//   NS_LOG_INFO ("At time " << Simulator::Now ().GetSeconds () << "s, trace Drop " << nxt << ", numPkts = " << numPkts);
+// }
+
+
+// static void CtrlRxBuffer(Ptr<TcpRxBuffer> buf){
+//   NS_LOG_INFO ("At time = " << Simulator::Now ().GetSeconds () << "s, the size of controller rx buffer is " << buf->Size() << ", cap = " << buf->MaxBufferSize());
+// }
 
 int
 main (int argc, char *argv[])
@@ -42,7 +63,7 @@ main (int argc, char *argv[])
   int num_controller = 1; // number of controllers
   int num_agg_switch = 3; // number of agg switch nodes
   int num_edge_switch = 16; // number of edge switch nodes
-  int num_host = 5; // number of hosts connected with one edge switch
+  int num_host = 1; // number of hosts connected with one edge switch
 
   bool verbose = true; // log information level indication in ryu application
 
@@ -56,7 +77,7 @@ main (int argc, char *argv[])
   cmd.Parse (argc, argv);
 
   std::string ofsoftswitch_file;
-  ofsoftswitch_file = "datacenter-ofsoftswitch13-5hosts-v3-" + std::to_string(prob) + ".log";
+  ofsoftswitch_file = "datacenter-ofsoftswitch13-1hosts-v3-" + std::to_string(prob) + ".log";
 
   if (verbose)
     {
@@ -64,7 +85,7 @@ main (int argc, char *argv[])
       // LogComponentEnable ("OFSwitch13Port", LOG_LEVEL_INFO);
       // LogComponentEnable ("OFSwitch13Queue", LOG_LEVEL_INFO);
       // LogComponentEnable ("OFSwitch13SocketHandler", LOG_LEVEL_INFO);
-      // LogComponentEnable ("OFSwitch13Controller", LOG_LEVEL_ALL);
+      LogComponentEnable ("OFSwitch13Controller", LOG_LEVEL_ALL);
       // LogComponentEnable ("OFSwitch13LearningController", LOG_LEVEL_INFO);
       // LogComponentEnable ("OFSwitch13Helper", LOG_LEVEL_ALL);
       // LogComponentEnable ("OFSwitch13Device", LOG_LEVEL_INFO);
@@ -75,9 +96,15 @@ main (int argc, char *argv[])
       //LogComponentEnable ("OFSwitch13ExternalHelper", LOG_LEVEL_ALL);
       //LogComponentEnable ("FlowMonitor", LOG_LEVEL_ALL);
       LogComponentEnable ("OFSwitch13DijkstraController", LOG_LEVEL_ALL);
-      // LogComponentEnable ("TcpSocketBase", LOG_LEVEL_ALL);
+      //LogComponentEnable ("TcpSocketBase", LOG_LEVEL_ALL);
       // LogComponentEnable ("DropTailQueue", LOG_LEVEL_ALL);
     }
+
+
+  // if (verbose) {
+  //   LogComponentEnable ("Datacenter_SDN", LOG_LEVEL_INFO);
+  //   LogComponentEnableAll(LOG_LEVEL_ALL);
+  // }
 
   Config::SetDefault("ns3::QueueBase::MaxSize", QueueSizeValue (QueueSize ("4294967295p")));
   // ---------------------define nodes-----------------------
@@ -217,6 +244,18 @@ main (int argc, char *argv[])
     }
   of13helper->CreateOpenFlowChannels();
   ofswitch13_device_container.SetMLEvictionPolicy(prob);
+
+
+  // Ptr<NetDevice> ctrlDev = of13helper->GetCtrlNetDevice(0);
+  // CsmaNetDevice* ctrlDev_cast = dynamic_cast<CsmaNetDevice*> (&(*ctrlDev));
+  // Ptr<Queue<Packet>> ctrlQueue = ctrlDev_cast->GetQueue();
+  // ctrlQueue->TraceConnectWithoutContext("Enqueue", MakeCallback(&EnQueueTracer));
+  // ctrlQueue->TraceConnectWithoutContext("Dequeue", MakeCallback(&DequeueTracer));
+  // ctrlQueue->TraceConnectWithoutContext("Drop", MakeCallback(&DropTracer));
+
+
+
+
 
   // install stack in the host nodes
   NS_LOG_INFO ("install stack in the host nodes");
@@ -387,11 +426,22 @@ main (int argc, char *argv[])
   flowHelper.SetMonitorAttribute ("MaxPerHopDelay", TimeValue(Seconds(50)));
   flowMonitor = flowHelper.Install (all_hosts);
 
+
+  // Ptr<const OFSwitch13Controller::RemoteSwitch> remote_sw_2 = dijkstraCtrl->GetRemoteSwitch(2);
+  // Ptr<Socket> remote_sw_2_socket = remote_sw_2->GetSocketHandler()->GetSocket();
+  // TcpSocketBase* remote_sw_2_tcp_socket = dynamic_cast<TcpSocketBase*> (&(*remote_sw_2_socket));
+  // remote_sw_2_tcp_socket->TraceConnectWithoutContext("RxBuffer", MakeCallback(&CtrlRxBuffer));
+  //
+  // Ptr<const OFSwitch13Controller::RemoteSwitch> remote_sw_3 = dijkstraCtrl->GetRemoteSwitch(3);
+  // Ptr<Socket> remote_sw_3_socket = remote_sw_3->GetSocketHandler()->GetSocket();
+  // TcpSocketBase* remote_sw_3_tcp_socket = dynamic_cast<TcpSocketBase*> (&(*remote_sw_3_socket));
+  // remote_sw_3_tcp_socket->TraceConnectWithoutContext("RxBuffer", MakeCallback(&CtrlRxBuffer));
+
   // Run the simulation
   Simulator::Stop (Seconds (simTime + 60));
   Simulator::Run ();
   std::string xml_file;
-  xml_file = "simulationResults/flowTransStats-datacenter-5hosts-v3-" + std::to_string(prob) + ".xml";
+  xml_file = "simulationResults/flowTransStats-datacenter-1hosts-v3-" + std::to_string(prob) + ".xml";
   flowMonitor->SerializeToXmlFile (xml_file, false, false);
   Simulator::Destroy ();
   return 0;

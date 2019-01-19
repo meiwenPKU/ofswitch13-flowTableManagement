@@ -357,11 +357,6 @@ OFSwitch13Device::ReceiveFromSwitchPort (Ptr<Packet> packet, uint32_t portNo,
   Ptr<Packet> copy = packet->Copy ();
   Ipv4Header iph;
   copy->RemoveHeader (iph);
-  Ipv4Address src = iph.GetSource();
-  Ipv4Address dst = iph.GetDestination();
-  if (src == Ipv4Address("10.1.1.1") && dst == Ipv4Address("10.1.1.6")){
-    NS_LOG_INFO ("debug here");
-  }
   // Check the packet for conformance to the pipeline capacity.
   uint32_t pktSizeBits = packet->GetSize () * 8;
   if (m_pipeTokens < pktSizeBits)
@@ -780,6 +775,8 @@ OFSwitch13Device::SendPacketInMessage (struct packet *pkt, uint8_t tableId,
 {
   NS_LOG_FUNCTION (this << pkt->ns3_uid << tableId << reason);
 
+  NS_LOG_WARN (Simulator::Now ().GetSeconds () << ", Sending Pkt-In Msg " << pkt->ns3_uid << " to the controller" );
+
   // Create the packet_in message.
   struct ofl_msg_packet_in msg;
   msg.header.type = OFPT_PACKET_IN;
@@ -853,7 +850,11 @@ OFSwitch13Device::SendToSwitchPort (struct packet *pkt, uint32_t portNo,
     {
       // This is a new packet, probably created by the controller and sent to
       // the switch within an OpenFlow packet-out message.
-      NS_ASSERT_MSG (pkt->ns3_uid == 0, "Invalid packet ID.");
+      if (pkt->ns3_uid != 0){
+        NS_LOG_WARN ("Packet " << pkt->ns3_uid << " has been deleted from the buffer previously");
+        return false;
+      }
+      //NS_ASSERT_MSG (pkt->ns3_uid == 0, "Invalid packet ID.");
       NS_LOG_DEBUG ("Creating new ns-3 packet from OpenFlow buffer.");
       packet = ofs::PacketFromBuffer (pkt->buffer);
     }
@@ -968,10 +969,8 @@ OFSwitch13Device::ReceiveFromController (Ptr<Packet> packet, Address from)
   // Print message content.
   char *msgStr = ofl_msg_to_string (msg, m_datapath->exp);
   Ipv4Address ctrlIp = InetSocketAddress::ConvertFrom (from).GetIpv4 ();
-  NS_LOG_DEBUG ("RX from controller " << ctrlIp << ": " << msgStr);
-  if(strstr(msgStr, "00:00:00:00:00:4f") != NULL) {
-    NS_LOG_DEBUG ("debug here");
-  }
+  NS_LOG_WARN (Simulator::Now ().GetSeconds () << ", RX from controller " << ctrlIp << ": " << msgStr);
+
   free (msgStr);
 
   // Increase internal counters based on message type.
@@ -1203,7 +1202,11 @@ OFSwitch13Device::BufferPacketRetrieve (uint64_t packetId)
 
   // Find packet in buffer.
   IdPacketMap_t::iterator it = m_bufferPkts.find (packetId);
-  NS_ASSERT_MSG (it != m_bufferPkts.end (), "Packet not found in buffer.");
+  if (it == m_bufferPkts.end ()){
+    NS_LOG_WARN ("dpId = " << m_dpId << ", drop packet " << packetId << " before receiving the corresponding pkt-out msg ");
+    return;
+  }
+  //NS_ASSERT_MSG (it != m_bufferPkts.end (), "Packet not found in buffer.");
 
   // Save packet into pipeline structure.
   m_pipePkt.SetPacket (it->first, it->second);
@@ -1223,7 +1226,7 @@ OFSwitch13Device::BufferPacketDelete (uint64_t packetId)
   IdPacketMap_t::iterator it = m_bufferPkts.find (packetId);
   if (it != m_bufferPkts.end ())
     {
-      NS_LOG_DEBUG ("Expired packet " << packetId << " deleted from buffer.");
+      NS_LOG_WARN ("Expired packet " << packetId << " deleted from buffer.");
       m_bufferExpireTrace (it->second);
       m_bufferPkts.erase (it);
     }

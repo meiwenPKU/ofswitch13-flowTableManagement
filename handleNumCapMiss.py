@@ -2,7 +2,7 @@
 this script is used to get the number of cap misses
 '''
 
-fname = "/home/yang/ns-3.29/ns3-datacenter-dijstra-5hosts-v3-0.5.log"
+fname = "/home/yang/ns-3.29/ns3-datacenter-dijstra-15hosts-rcv-204800-tx-400p-0.8-v2.log"
 
 v_numCapMiss = 20*[0]
 with open(fname, 'r') as f:

@@ -21,6 +21,7 @@
 #include <wordexp.h>
 #include <ns3/uinteger.h>
 #include <ns3/tcp-socket-factory.h>
+#include <ns3/tcp-socket-base.h>
 #include "ofswitch13-controller.h"
 
 namespace ns3 {
@@ -141,6 +142,8 @@ OFSwitch13Controller::StartApplication ()
   TypeId tcpFactory = TypeId::LookupByName ("ns3::TcpSocketFactory");
   m_serverSocket = Socket::CreateSocket (GetNode (), tcpFactory);
   m_serverSocket->SetAttribute ("SegmentSize", UintegerValue (8900));
+  // set the rx buffer size for the socket used to receive pkts from switches
+  m_serverSocket->SetAttribute ("RcvBufSize", UintegerValue (204800));
   m_serverSocket->Bind (InetSocketAddress (Ipv4Address::GetAny (), m_port));
   m_serverSocket->Listen ();
 
@@ -210,8 +213,8 @@ OFSwitch13Controller::SendToSwitch (Ptr<const RemoteSwitch> swtch,
   NS_LOG_FUNCTION (this << swtch);
 
   char *msgStr = ofl_msg_to_string (msg, 0);
-  NS_LOG_DEBUG ("TX to switch " << swtch->GetIpv4 () <<
-                " [dp " << swtch->GetDpId () << "]: " << msgStr);
+  NS_LOG_WARN (Simulator::Now ().GetSeconds () << ", TX to switch " << swtch->GetIpv4 () << " [dp " << swtch->GetDpId () << "]: " << msgStr);
+
   free (msgStr);
 
   // Set the transaction ID only for unknown values
@@ -592,8 +595,7 @@ OFSwitch13Controller::ReceiveFromSwitch (Ptr<Packet> packet, Address from)
     {
       Ptr<RemoteSwitch> swtch = GetRemoteSwitch (from);
       char *msgStr = ofl_msg_to_string (msg, 0);
-      NS_LOG_DEBUG ("RX from switch " << swtch->GetIpv4 () <<
-                    " [dp " << swtch->GetDpId () << "]: " << msgStr);
+      NS_LOG_WARN (Simulator::Now ().GetSeconds () << ", RX from switch " << swtch->GetIpv4 () << " [dp " << swtch->GetDpId () << "]: " << msgStr);
       free (msgStr);
 
       error = HandleSwitchMsg (msg, swtch, xid);
@@ -640,26 +642,37 @@ OFSwitch13Controller::SocketRequest (Ptr<Socket> socket, const Address& from)
   return true;
 }
 
+void OFSwitch13Controller::CtrlRxBuffer(uint64_t dpId, Ptr<TcpRxBuffer> buf){
+  NS_LOG_INFO ("At time = " << Simulator::Now ().GetSeconds () << "s, the size of controller rx buffer is " << buf->Size() << ", cap = " << buf->MaxBufferSize() << ", dpId = " << dpId);
+}
+
 void
 OFSwitch13Controller::SocketAccept (Ptr<Socket> socket, const Address& from)
 {
   NS_LOG_FUNCTION (this << socket << from);
+  // set the receive buffer as a small value such that we can observer overflow
+
 
   Ipv4Address ipAddr = InetSocketAddress::ConvertFrom (from).GetIpv4 ();
   uint16_t port = InetSocketAddress::ConvertFrom (from).GetPort ();
   NS_LOG_INFO ("Switch connection accepted from " << ipAddr << ":" << port);
-
+  NS_LOG_WARN ("The socket used to send pkts to switch " << ipAddr << " is "<< socket);
   // This is a new switch connection to this controller.
   // Let's create the remote switch metadata and save it.
   Ptr<RemoteSwitch> swtch = Create<RemoteSwitch> ();
   swtch->m_address = from;
   swtch->m_ctrlApp = Ptr<OFSwitch13Controller> (this);
 
+  TcpSocketBase* tcp_socket_base = dynamic_cast<TcpSocketBase*> (&(*socket));
+  NS_LOG_INFO ("Rx buffer size = " << tcp_socket_base->GetRxBuffer()->MaxBufferSize());
+
   // As we have more than one socket that is used for communication between
   // this OpenFlow controller and switches, we need to handle the process of
   // sending/receiving OpenFlow messages to/from sockets in an independent way.
   // So, each socket has its own socket handler to this end.
   swtch->m_handler = CreateObject<OFSwitch13SocketHandler> (socket);
+  // set the pkt/msg processing delay as 50 us
+  swtch->m_handler->SetAttribute("PktProcDelay", UintegerValue(50000));
   swtch->m_handler->SetReceiveCallback (
     MakeCallback (&OFSwitch13Controller::ReceiveFromSwitch, this));
 

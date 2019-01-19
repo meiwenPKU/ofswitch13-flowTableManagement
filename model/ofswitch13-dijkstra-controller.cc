@@ -125,7 +125,7 @@ OFSwitch13DijkstraController::HandlePacketIn (ofl_msg_packet_in *msg, Ptr<const 
   pkt_in_cnt[dpId][key] += 1;
   if (pkt_in_cnt[dpId][key] > 1) {
     pkt_in_cnt_per_dp[dpId] += 1;
-    NS_LOG_WARN ("Controller counts cap miss: dpId=" << dpId << ", numCapMiss=" << pkt_in_cnt_per_dp[dpId]);
+    NS_LOG_WARN ("Controller counts cap miss: dpId=" << dpId << ", numCapMiss=" << pkt_in_cnt_per_dp[dpId] << ", " << key << ", t=" << Simulator::Now ().GetSeconds ());
   }
   free (m);
 
@@ -247,8 +247,8 @@ OFSwitch13DijkstraController::HandlePacketIn (ofl_msg_packet_in *msg, Ptr<const 
           reply.data_length = msg->data_length;
           reply.data = msg->data;
         }
-      NS_LOG_INFO ("buffer id " << (msg->buffer_id));
-      NS_LOG_INFO ("data lenth " << reply.data_length);
+      //NS_LOG_INFO ("buffer id " << (msg->buffer_id));
+      //NS_LOG_INFO ("data lenth " << reply.data_length);
 
       reply.actions_num = 1;
       reply.actions = (ofl_action_header **) &action;

@@ -205,6 +205,10 @@ public:
   static void EnableDatapathLogs (std::string prefix = "",
                                   bool explicitFilename = false);
 
+  Ptr<NetDevice> GetCtrlNetDevice(uint32_t i){
+    return m_controlDevs.Get(i);
+  }
+
 protected:
   /** Destructor implementation. */
   virtual void DoDispose ();

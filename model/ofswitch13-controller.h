@@ -23,6 +23,7 @@
 
 #include <ns3/application.h>
 #include <ns3/socket.h>
+#include <ns3/tcp-rx-buffer.h>
 #include "ofswitch13-interface.h"
 #include "ofswitch13-socket-handler.h"
 #include <string>
@@ -321,6 +322,7 @@ protected:
   //\}
 
 private:
+  static void CtrlRxBuffer(uint64_t dpId, Ptr<TcpRxBuffer> buf);
   /**
    * Called when an OpenFlow message is received from a switch.
    * Dispatches control messages to appropriate handler functions.

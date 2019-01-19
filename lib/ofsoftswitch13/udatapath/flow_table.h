@@ -113,7 +113,10 @@ void lru_evict(struct flow_table *table, double time_stamp);
 /*Update the number of capacity misses if applicable*/
 void update_num_cap_miss(struct flow_table *table, struct flow_entry *entry);
 
-char* get_ipv4_key (struct ofl_match *omt);
+/*Update the end time of a flow*/
+void update_flow_end_time(struct flow_table *table, struct flow_entry *entry, double time_stamp);
+
+char* get_key (struct ofl_match *omt);
 
 /* Apply ml policy to evict an existing flow entry */
 void ml_evict(struct flow_table *table, double time_stamp);

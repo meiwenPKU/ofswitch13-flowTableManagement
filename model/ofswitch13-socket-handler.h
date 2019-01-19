@@ -95,12 +95,15 @@ private:
    * \param socket The connected socket.
    */
   void Recv (Ptr<Socket> socket);
+  void RecvHandler (Ptr<Socket> socket);
 
   Ptr<Socket>               m_socket;         //!< TCP socket.
   Ptr<Packet>               m_pendingPacket;  //!< Buffer for receiving bytes.
   uint32_t                  m_pendingBytes;   //!< Pending bytes for message.
   MessageCallback           m_receivedMsg;    //!< OpenFlow message callback.
   std::queue<Ptr<Packet> >  m_txQueue;        //!< TX queue.
+  uint32_t                  m_pktProcDelay;   //!< the delay (ns) for processing a msg from the switch for the controller
+  int64_t                  m_lastRecTime;    //!< the time when the last packet is received
 };
 
 } // namespace ns3
