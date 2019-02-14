@@ -27,7 +27,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  */
-
+ #include <unistd.h>
+ #include <sys/stat.h>
+ #include <sys/types.h>
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
@@ -110,7 +112,7 @@ add_to_timeout_lists(struct flow_table *table, struct flow_entry *entry) {
 /* get the ip address key: src ipv4-dst ipv4. For example, 1.1.1.1-2.2.2.2 */
 char* get_key (struct ofl_match *omt){
   struct ofl_match_tlv   *f;
-  int i;
+  int i, j;
   uint8_t src_octet[4];
   uint8_t dst_octet[4];
   uint8_t field;
@@ -130,15 +132,15 @@ char* get_key (struct ofl_match *omt){
         case OFPXMT_OFB_ARP_SPA:
         case OFPXMT_OFB_IPV4_SRC:
           ip = (uint32_t *) (f->value);
-          for (int i = 0; i < 4; i++){
-            src_octet[i] = ((*ip) >> (i*8)) & 0xff;
+          for (j = 0; j < 4; j++){
+            src_octet[j] = ((*ip) >> (j*8)) & 0xff;
           }
     			break;
         case OFPXMT_OFB_ARP_TPA:
     		case OFPXMT_OFB_IPV4_DST:
           ip = (uint32_t *) (f->value);
-          for (int i = 0; i < 4; i++){
-            dst_octet[i] = ((*ip) >> (i*8)) & 0xff;
+          for (j = 0; j < 4; j++){
+            dst_octet[j] = ((*ip) >> (j*8)) & 0xff;
           }
     			break;
         default:
@@ -159,7 +161,7 @@ void ml_evict(struct flow_table *table, double time_stamp) {
   struct flow_entry *evict_entry = NULL;
   int inactive_count = 0;
   int active_count = 0;
-  //uint64_t lru_value = 0xffffffffffffffffUL;
+  uint64_t lru_value = 0xffffffffffffffffUL;
   char* msg = NULL;
   FILE* stream;
   char *src, *dst, *end, *key;
@@ -167,29 +169,70 @@ void ml_evict(struct flow_table *table, double time_stamp) {
   size_t hash_value;
   char line[1024];
   bool evict_active = false;
+  int N = 5;
+  char* fname = "/home/yang/ns-3.29/simulationResults/flowStats.csv";
+  struct stat file_stat;
+  int err;
+
 
   /* Init flow stats */
   if (!table->initiated)
     {
+      int seed = time(NULL);
+      srand(seed);
       hmap_init(&table->flow_stats);
       table->initiated = true;
-      stream = fopen ("/home/yang/ns-3.29/simulationResults/flowStats.csv", "r");
+      err = stat(fname, &file_stat);
+      if (err != 0) {
+          perror(" [file_is_modified] stat");
+          exit(0);
+      }
+      table->old_MTime = file_stat.st_mtim;
+      stream = fopen (fname, "r");
       while (fgets (line, 1024, stream))
         {
           src = strtok (line, ",");
           dst = strtok (NULL, ",");
-          end = strtok (NULL, ","); // this is the start time of the flow
+          //end = strtok (NULL, ","); // this is the start time of the flow
           end = strtok (NULL, ",");
-
           node = malloc (sizeof (struct hmap_node));
           key = malloc (strlen (src) + strlen (dst) + 1);
           sprintf (key, "%s-%s", src, dst);
           hash_value = hash_string (key, 0);
           node->value = atof (end);
-          //printf ("src=%s, dst=%s, end=%f, hash_value=%zu", src, dst, node->value, hash_value);
           hmap_insert (&table->flow_stats, node, hash_value);
         }
       fclose (stream);
+    } else {
+      err = stat(fname, &file_stat);
+      if (err != 0) {
+          perror(" [file_is_modified] stat");
+          exit(0);
+      }
+      if (file_stat.st_mtim.tv_sec > table->old_MTime.tv_sec || file_stat.st_mtim.tv_nsec > table->old_MTime.tv_nsec){
+        table->old_MTime = file_stat.st_mtim;
+        stream = fopen (fname, "r");
+        while (fgets (line, 1024, stream))
+          {
+            src = strtok (line, ",");
+            dst = strtok (NULL, ",");
+            //end = strtok (NULL, ","); // this is the start time of the flow
+            end = strtok (NULL, ",");
+
+            key = malloc (strlen (src) + strlen (dst) + 1);
+            sprintf (key, "%s-%s", src, dst);
+            hash_value = hash_string (key, 0);
+            node = hmap_first_with_hash(&(table->flow_stats), hash_value);
+            if (node == NULL){
+              node = malloc (sizeof (struct hmap_node));
+              hash_value = hash_string (key, 0);
+              node->value = atof (end);
+              hmap_insert (&table->flow_stats, node, hash_value);
+            }
+            free(key);
+          }
+        fclose (stream);
+      }
     }
 
   LIST_FOR_EACH (entry, struct flow_entry, match_node, &table->match_entries){
@@ -206,9 +249,10 @@ void ml_evict(struct flow_table *table, double time_stamp) {
     node = hmap_first_with_hash(&(table->flow_stats), hash_value);
 
     if (node != NULL && node->value + 1 < time_stamp){
-      // this flow is inactive flow
-      inactive_count ++;
-      if (rand() % inactive_count < 1){
+      // this flow may be inactive, evict the lru entry to further make sure that the evicted one is inactive
+      inactive_count += 1;
+      if (entry->last_used < lru_value){
+        lru_value = entry->last_used;
         inactive_entry = entry;
       }
     } else {
@@ -217,22 +261,16 @@ void ml_evict(struct flow_table *table, double time_stamp) {
       if (rand() % active_count < 1){
         active_entry = entry;
       }
-      // if (active_entry == NULL){
-      //   active_entry = entry;
-      //   lru_value = entry->last_used;
-      // } else if (entry->last_used < lru_value){
-      //   lru_value = entry->last_used;
-      //   active_entry = entry;
-      // }
     }
   }
   if (active_entry == NULL){
+    VLOG_WARN(LOG_MODULE, "No active flow entry is detected");
     evict_entry = inactive_entry;
   } else if (inactive_entry == NULL){
     VLOG_WARN(LOG_MODULE, "No inactive flow entry is detected");
     evict_entry = active_entry;
     evict_active = true;
-  } else if (rand() % 1000 < table->prob_ml*1000){
+  } else if (inactive_count >= N && rand() % 1000 < table->prob_ml*1000){
     evict_entry = inactive_entry;
   } else {
     evict_entry = active_entry;
@@ -241,7 +279,7 @@ void ml_evict(struct flow_table *table, double time_stamp) {
   //VLOG_DBG(LOG_MODULE, "Evict the flow entry:");
   msg = ofl_structs_oxm_match_to_string((struct ofl_match *)(evict_entry->stats->match));
   //printf ("t=%f, evict the flow entry: %s\n", time_stamp, msg);
-  VLOG_WARN(LOG_MODULE, "dpId=%d, tableId=%d, t=%f, evict the %d flow entry: %s", (uint32_t)(table->dp->id), table->stats->table_id, time_stamp, evict_active, msg);
+  VLOG_WARN(LOG_MODULE, "dpId=%d, tableId=%d, t=%f, lru=%d, inactive_count=%d, evict the %d flow entry: %s", (uint32_t)(table->dp->id), table->stats->table_id, time_stamp, (uint32_t)lru_value, inactive_count, evict_active, msg);
   free(msg);
   // evict the lru entry
   flow_entry_remove(evict_entry, OFPRR_EVICTION);
@@ -254,7 +292,11 @@ void lru_evict(struct flow_table *table, double time_stamp) {
     uint64_t lru_value = 0xffffffffffffffffUL;
     char* msg = NULL;
     LIST_FOR_EACH (entry, struct flow_entry, match_node, &table->match_entries){
-      // loop through each entry
+      // avoid to evict the all_match flow entry
+      struct ofl_match* omt = (struct ofl_match *)(entry->stats->match);
+      if (omt->header.length <= 4){
+        continue;
+      }
       if (lru_entry == NULL){
         lru_entry = entry;
         lru_value = entry->last_used;
@@ -267,7 +309,7 @@ void lru_evict(struct flow_table *table, double time_stamp) {
     //VLOG_DBG(LOG_MODULE, "Evict the flow entry:");
     msg = ofl_structs_oxm_match_to_string((struct ofl_match *)(lru_entry->stats->match));
     //printf ("t=%f, evict the flow entry: %s\n", time_stamp, msg);
-    VLOG_WARN(LOG_MODULE, "dpId=%d, tableId=%d, t=%f, evict the flow entry: %s", (uint32_t)(table->dp->id), table->stats->table_id, time_stamp, msg);
+    VLOG_WARN(LOG_MODULE, "dpId=%d, tableId=%d, t=%f, lru=%d, evict the flow entry: %s", (uint32_t)(table->dp->id), table->stats->table_id, time_stamp, (uint32_t)lru_value, msg);
     free(msg);
     // evict the lru entry
     flow_entry_remove(lru_entry, OFPRR_EVICTION);
@@ -291,7 +333,11 @@ void update_flow_end_time(struct flow_table *table, struct flow_entry *entry, do
   node = hmap_first_with_hash(&(table->flow_stats), hash_value);
   if (node != NULL && node->value < time_stamp){
     // If a new flow entry is installed after the previously Calculated flow end time, then we need to update the end time for the flow
-    new_time = node->value + 3 * (time_stamp - node->value);
+    if (time_stamp - node->value > 10){
+      new_time = time_stamp;
+    } else {
+      new_time = node->value + 2 * (time_stamp - node->value);
+    }
     VLOG_WARN(LOG_MODULE, "dpId=%d, tableId=%d, t=%f, update the end time of flow %s from %f to %f", (uint32_t)(table->dp->id), table->stats->table_id, time_stamp, entry_key, node->value, new_time);
     node->value = new_time;
   }

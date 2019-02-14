@@ -35,7 +35,7 @@
 #include "oflib/ofl-structs.h"
 #include "pipeline.h"
 #include "timeval.h"
-
+#include <time.h>
 
 #define FLOW_TABLE_MAX_ENTRIES 1024
 #define TABLE_FEATURES_NUM 14
@@ -66,6 +66,7 @@ struct flow_table {
     bool                      initiated;
     double                    prob_ml; // the probability of evicting an inactive flow entry for ml eviction to simulate the ml policy
     bool                      use_lru; // use the lru policy, otherwise using ml policy
+    struct timespec                    old_MTime; // the last time for checking the stats file
 };
 
 extern uint32_t oxm_ids[];
